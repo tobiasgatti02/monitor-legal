@@ -83,13 +83,13 @@ Codigos de salida:
 - `7`: fallo guardando estado
 - `1`: fallo general scraping
 
-## Deploy en GitHub Actions (cada 5 minutos)
+## Deploy en GitHub Actions (cada 2 horas)
 
 Workflow: `.github/workflows/monitor.yml`
 
 Disparadores:
 
-- `schedule: */5 * * * *`
+- `schedule: 0 */2 * * *`
 - `workflow_dispatch`
 
 ### Secrets obligatorios en GitHub
