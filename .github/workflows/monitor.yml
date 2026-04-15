@@ -56,6 +56,8 @@ jobs:
       - name: Commit updated state.json
         if: success()
         run: |
+          BRANCH_NAME="${GITHUB_REF_NAME:-main}"
+
           if git diff --quiet -- state.json; then
             echo "state.json no cambió"
             exit 0
@@ -64,8 +66,33 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add state.json
+
+          if git diff --cached --quiet; then
+            echo "No hay cambios staged para commitear"
+            exit 0
+          fi
+
           git commit -m "chore: update PJN state [skip ci]"
-          git push
+
+          for attempt in 1 2 3; do
+            if git push origin "HEAD:${BRANCH_NAME}"; then
+              echo "state.json pusheado correctamente"
+              exit 0
+            fi
+
+            if [ "${attempt}" -eq 3 ]; then
+              echo "No se pudo pushear state.json tras 3 intentos"
+              exit 1
+            fi
+
+            echo "Push rechazado (non-fast-forward). Intentando rebase y reintento..."
+            git fetch origin "${BRANCH_NAME}"
+            if ! git rebase "origin/${BRANCH_NAME}"; then
+              echo "No se pudo rebasear automaticamente state.json. Se omite push en esta corrida."
+              git rebase --abort || true
+              exit 0
+            fi
+          done
 
       - name: Upload state artifact
         if: always()
