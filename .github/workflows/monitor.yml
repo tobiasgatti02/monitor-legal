@@ -19,6 +19,13 @@ jobs:
   monitor:
     runs-on: ubuntu-latest
     timeout-minutes: 12
+    
+    strategy:
+      matrix:
+        user:
+          - gatti
+          - mazzarini
+      max-parallel: 2
 
     steps:
       - name: Checkout repository
@@ -40,55 +47,56 @@ jobs:
 
       - name: Run PJN monitor
         env:
-          PJN_USER: ${{ secrets.PJN_USER }}
-          PJN_PASS: ${{ secrets.PJN_PASS }}
+          PJN_USER: ${{ secrets[format('PJN_USER_{0}', matrix.user)] || secrets.PJN_USER }}
+          PJN_PASS: ${{ secrets[format('PJN_PASS_{0}', matrix.user)] || secrets.PJN_PASS }}
           EMAIL_USER: ${{ secrets.EMAIL_USER }}
           EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
-          ALERT_EMAIL: Gattilegales@gmail.com
+          ALERT_EMAIL: ${{ secrets[format('ALERT_EMAIL_{0}', matrix.user)] || 'Gattilegales@gmail.com' }}
           PJN_HEADLESS: 'true'
           PJN_TIMEOUT_MS: '45000'
           PJN_RETRIES: '2'
-          PJN_STATE_PATH: state.json
+          PJN_STATE_PATH: state_${{ matrix.user }}.json
           LOG_LEVEL: INFO
           PYTHONUNBUFFERED: '1'
         run: python main.py
 
-      - name: Commit updated state.json
+      - name: Commit updated state files
         if: success()
         run: |
           BRANCH_NAME="${GITHUB_REF_NAME:-main}"
+          STATE_FILE="state_${{ matrix.user }}.json"
 
-          if git diff --quiet -- state.json; then
-            echo "state.json no cambió"
+          if git diff --quiet -- "${STATE_FILE}"; then
+            echo "${STATE_FILE} no cambió"
             exit 0
           fi
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add state.json
+          git add "${STATE_FILE}"
 
           if git diff --cached --quiet; then
             echo "No hay cambios staged para commitear"
             exit 0
           fi
 
-          git commit -m "chore: update PJN state [skip ci]"
+          git commit -m "chore: update PJN state for ${{ matrix.user }} [skip ci]"
 
           for attempt in 1 2 3; do
             if git push origin "HEAD:${BRANCH_NAME}"; then
-              echo "state.json pusheado correctamente"
+              echo "${STATE_FILE} pusheado correctamente"
               exit 0
             fi
 
             if [ "${attempt}" -eq 3 ]; then
-              echo "No se pudo pushear state.json tras 3 intentos"
+              echo "No se pudo pushear ${STATE_FILE} tras 3 intentos"
               exit 1
             fi
 
             echo "Push rechazado (non-fast-forward). Intentando rebase y reintento..."
             git fetch origin "${BRANCH_NAME}"
             if ! git rebase "origin/${BRANCH_NAME}"; then
-              echo "No se pudo rebasear automaticamente state.json. Se omite push en esta corrida."
+              echo "No se pudo rebasear automaticamente ${STATE_FILE}. Se omite push en esta corrida."
               git rebase --abort || true
               exit 0
             fi
@@ -98,7 +106,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: pjn-state-${{ github.run_id }}
-          path: state.json
+          name: pjn-state-${{ matrix.user }}-${{ github.run_id }}
+          path: state_${{ matrix.user }}.json
           if-no-files-found: ignore
           retention-days: 7

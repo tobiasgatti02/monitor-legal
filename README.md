@@ -94,30 +94,40 @@ Disparadores:
 
 ### Secrets obligatorios en GitHub
 
-En tu repo -> Settings -> Secrets and variables -> Actions -> New repository secret:
+En tu repo -> Settings -> Secrets and variables > Actions > New repository secret:
 
-- `PJN_USER`
-- `PJN_PASS`
-- `EMAIL_USER`
-- `EMAIL_PASS`
+- `EMAIL_USER` (compartido para todos los usuarios)
+- `EMAIL_PASS` (compartido para todos los usuarios)
 
-El destinatario esta fijo en el workflow como `Gattilegales@gmail.com`, pero podes cambiarlo con `ALERT_EMAIL`.
+**Para un usuario (ej. Gatti):**
+- `PJN_USER` o `PJN_USER_gatti`
+- `PJN_PASS` o `PJN_PASS_gatti`
+- `ALERT_EMAIL_gatti` (opcional; default Gattilegales@gmail.com)
 
-## Persistencia de `state.json`
+**Para múltiples usuarios (ej. Gatti + Mazzarini):**
+
+El workflow ejecuta ambos usuarios en paralelo usando `strategy.matrix`. Configurá:
+
+- `PJN_USER_gatti` / `PJN_PASS_gatti` / `ALERT_EMAIL_gatti`
+- `PJN_USER_mazzarini` / `PJN_PASS_mazzarini` / `ALERT_EMAIL_mazzarini`
+
+Cada usuario tendrá su propio `state_gatti.json` y `state_mazzarini.json`.
+
+## Persistencia de archivos de estado
 
 El workflow:
 
-1. Ejecuta monitor.
-2. Si `state.json` cambio, hace commit y push automatico.
-3. Tambien sube artifact del estado en cada corrida.
+1. Ejecuta monitor para cada usuario.
+2. Si su respectivo `state_<user>.json` cambió, hace commit y push automático.
+3. Sube artifact del estado de cada usuario en cada corrida.
 
-Esto permite continuidad de estado entre ejecuciones.
+Esto permite continuidad de estado entre ejecuciones por usuario.
 
 ## Seguridad
 
-- No hay credenciales hardcodeadas en codigo.
+- No hay credenciales hardcodeadas en código.
 - Solo se usan variables de entorno/secrets.
-- `state.json` guarda solo expedientes detectados y metadatos (sin passwords).
+- `state_<user>.json` guarda solo expedientes detectados y metadatos (sin passwords).
 
 ## Troubleshooting
 
