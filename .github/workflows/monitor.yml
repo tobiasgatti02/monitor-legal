@@ -33,6 +33,14 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Restore state cache
+        uses: actions/cache@v4
+        with:
+          path: state_${{ matrix.user }}.json
+          key: pjn-state-${{ matrix.user }}-${{ github.run_id }}
+          restore-keys: |
+            pjn-state-${{ matrix.user }}-
+
       - name: Set up Python 3.12
         uses: actions/setup-python@v6
         with:
@@ -59,48 +67,6 @@ jobs:
           LOG_LEVEL: INFO
           PYTHONUNBUFFERED: '1'
         run: python main.py
-
-      - name: Commit updated state files
-        if: success()
-        run: |
-          BRANCH_NAME="${GITHUB_REF_NAME:-main}"
-          STATE_FILE="state_${{ matrix.user }}.json"
-
-          if git diff --quiet -- "${STATE_FILE}"; then
-            echo "${STATE_FILE} no cambió"
-            exit 0
-          fi
-
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add "${STATE_FILE}"
-
-          if git diff --cached --quiet; then
-            echo "No hay cambios staged para commitear"
-            exit 0
-          fi
-
-          git commit -m "chore: update PJN state for ${{ matrix.user }} [skip ci]"
-
-          for attempt in 1 2 3; do
-            if git push origin "HEAD:${BRANCH_NAME}"; then
-              echo "${STATE_FILE} pusheado correctamente"
-              exit 0
-            fi
-
-            if [ "${attempt}" -eq 3 ]; then
-              echo "No se pudo pushear ${STATE_FILE} tras 3 intentos"
-              exit 1
-            fi
-
-            echo "Push rechazado (non-fast-forward). Intentando rebase y reintento..."
-            git fetch origin "${BRANCH_NAME}"
-            if ! git rebase "origin/${BRANCH_NAME}"; then
-              echo "No se pudo rebasear automaticamente ${STATE_FILE}. Se omite push en esta corrida."
-              git rebase --abort || true
-              exit 0
-            fi
-          done
 
       - name: Upload state artifact
         if: always()
