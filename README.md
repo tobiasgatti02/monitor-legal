@@ -83,13 +83,13 @@ Codigos de salida:
 - `7`: fallo guardando estado
 - `1`: fallo general scraping
 
-## Deploy en GitHub Actions (cada 2 horas)
+## Deploy en GitHub Actions (cada 1 hora)
 
 Workflow: `.github/workflows/monitor.yml`
 
 Disparadores:
 
-- `schedule: 0 */2 * * *`
+- `schedule: 0 * * * *`
 - `workflow_dispatch`
 
 ### Secrets obligatorios en GitHub
@@ -99,27 +99,25 @@ En tu repo -> Settings -> Secrets and variables > Actions > New repository secre
 - `EMAIL_USER` (compartido para todos los usuarios)
 - `EMAIL_PASS` (compartido para todos los usuarios)
 
-**Para un usuario (ej. Gatti):**
-- `PJN_USER` o `PJN_USER_gatti`
-- `PJN_PASS` o `PJN_PASS_gatti`
-- `ALERT_EMAIL_gatti` (opcional; default Gattilegales@gmail.com)
+**Jobs separados en GitHub Actions:**
 
-**Para múltiples usuarios (ej. Gatti + Mazzarini):**
+- `monitor-gatti` usa `PJN_USER_GATTI` / `PJN_PASS_GATTI` / `ALERT_EMAIL_GATTI`
+- `monitor-mazzarini` usa `PJN_USER_MAZZARINI` / `PJN_PASS_MAZZARINI` / `ALERT_EMAIL_MAZZARINI`
 
-El workflow ejecuta ambos usuarios en paralelo usando `strategy.matrix`. Configurá:
+Cada job tiene su propio estado:
 
-- `PJN_USER_gatti` / `PJN_PASS_gatti` / `ALERT_EMAIL_gatti`
-- `PJN_USER_mazzarini` / `PJN_PASS_mazzarini` / `ALERT_EMAIL_mazzarini`
+- `state_gatti.json`
+- `state_mazzarini.json`
 
-Cada usuario tendrá su propio `state_gatti.json` y `state_mazzarini.json`.
+Para el caso de Mazzarini, el mail de alerta debe ser `mazzariniagustin@gmail.com`.
 
 ## Persistencia de archivos de estado
 
 El workflow:
 
-1. Ejecuta monitor para cada usuario.
-2. Si su respectivo `state_<user>.json` cambió, hace commit y push automático.
-3. Sube artifact del estado de cada usuario en cada corrida.
+1. Ejecuta `monitor-gatti` y `monitor-mazzarini` como jobs separados.
+2. Cada job usa su cuenta PJN y su propio archivo de estado.
+3. Sube artifact del estado de cada cuenta en cada corrida.
 
 Esto permite continuidad de estado entre ejecuciones por usuario.
 

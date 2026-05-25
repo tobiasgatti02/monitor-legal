@@ -16,16 +16,9 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  monitor:
+  monitor-gatti:
     runs-on: ubuntu-latest
     timeout-minutes: 12
-    
-    strategy:
-      matrix:
-        user:
-          - gatti
-          - mazzarini
-      max-parallel: 2
 
     steps:
       - name: Checkout repository
@@ -36,10 +29,10 @@ jobs:
       - name: Restore state cache
         uses: actions/cache@v4
         with:
-          path: state_${{ matrix.user }}.json
-          key: pjn-state-${{ matrix.user }}-${{ github.run_id }}
+          path: state_gatti.json
+          key: pjn-state-gatti-${{ github.run_id }}
           restore-keys: |
-            pjn-state-${{ matrix.user }}-
+            pjn-state-gatti-
 
       - name: Set up Python 3.12
         uses: actions/setup-python@v6
@@ -55,15 +48,15 @@ jobs:
 
       - name: Run PJN monitor
         env:
-          PJN_USER: ${{ secrets[format('PJN_USER_{0}', matrix.user)] || secrets.PJN_USER }}
-          PJN_PASS: ${{ secrets[format('PJN_PASS_{0}', matrix.user)] || secrets.PJN_PASS }}
+          PJN_USER: ${{ secrets.PJN_USER_GATTI }}
+          PJN_PASS: ${{ secrets.PJN_PASS_GATTI }}
           EMAIL_USER: ${{ secrets.EMAIL_USER }}
           EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
-          ALERT_EMAIL: ${{ secrets[format('ALERT_EMAIL_{0}', matrix.user)] || 'Gattilegales@gmail.com' }}
+          ALERT_EMAIL: ${{ secrets.ALERT_EMAIL_GATTI || 'Gattilegales@gmail.com' }}
           PJN_HEADLESS: 'true'
           PJN_TIMEOUT_MS: '45000'
           PJN_RETRIES: '2'
-          PJN_STATE_PATH: state_${{ matrix.user }}.json
+          PJN_STATE_PATH: state_gatti.json
           LOG_LEVEL: INFO
           PYTHONUNBUFFERED: '1'
         run: python main.py
@@ -72,7 +65,61 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: pjn-state-${{ matrix.user }}-${{ github.run_id }}
-          path: state_${{ matrix.user }}.json
+          name: pjn-state-gatti-${{ github.run_id }}
+          path: state_gatti.json
+          if-no-files-found: ignore
+          retention-days: 7
+
+  monitor-mazzarini:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Restore state cache
+        uses: actions/cache@v4
+        with:
+          path: state_mazzarini.json
+          key: pjn-state-mazzarini-${{ github.run_id }}
+          restore-keys: |
+            pjn-state-mazzarini-
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          playwright install --with-deps chromium
+
+      - name: Run PJN monitor
+        env:
+          PJN_USER: ${{ secrets.PJN_USER_MAZZARINI }}
+          PJN_PASS: ${{ secrets.PJN_PASS_MAZZARINI }}
+          EMAIL_USER: ${{ secrets.EMAIL_USER }}
+          EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
+          ALERT_EMAIL: ${{ secrets.ALERT_EMAIL_MAZZARINI || 'mazzariniagustin@gmail.com' }}
+          PJN_HEADLESS: 'true'
+          PJN_TIMEOUT_MS: '45000'
+          PJN_RETRIES: '2'
+          PJN_STATE_PATH: state_mazzarini.json
+          LOG_LEVEL: INFO
+          PYTHONUNBUFFERED: '1'
+        run: python main.py
+
+      - name: Upload state artifact
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: pjn-state-mazzarini-${{ github.run_id }}
+          path: state_mazzarini.json
           if-no-files-found: ignore
           retention-days: 7
