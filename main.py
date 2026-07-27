@@ -8,18 +8,22 @@ from datetime import datetime
 
 from dotenv import load_dotenv
 
-from utils.mailer import send_new_expedientes_email
 from utils.scraper import (
     PJN_LIST_URL,
     CaptchaDetectedError,
     ExtractionError,
     LoginError,
     ScraperError,
-    collect_expedientes,
 )
-from utils.storage import detect_new, load_state, save_state
+from workers.pjn.browser import collect_expedientes
+from workers.pjn.connector import PjnConnector
+from workers.pjn.neon_sink import NeonEventSink, NeonPersistenceError
+from workers.pjn.notifications import SmtpNewCaseNotifier
+from workers.pjn.state import JsonCaseStateRepository
 
 DEFAULT_ALERT_EMAIL = "Gattilegales@gmail.com"
+DEFAULT_TENANT_ID = "legacy-single-tenant"
+DEFAULT_CONNECTOR_ID = "pjn-legacy"
 
 
 def _bool_env(name: str, default: bool) -> bool:
@@ -77,14 +81,29 @@ def run_monitor() -> int:
     timeout_ms = _int_env("PJN_TIMEOUT_MS", 45000)
     retries = _int_env("PJN_RETRIES", 2)
     headless = _bool_env("PJN_HEADLESS", True)
+    tenant_id = os.getenv("MONITOR_TENANT_ID", DEFAULT_TENANT_ID)
+    connector_id = os.getenv("PJN_CONNECTOR_ID", DEFAULT_CONNECTOR_ID)
+    database_url = os.getenv("DATABASE_URL")
+    neon_required = _bool_env("NEON_REQUIRED", False)
 
-    previous_state = load_state(state_path)
+    state_repository = JsonCaseStateRepository(
+        state_path=state_path,
+        source_url=PJN_LIST_URL,
+    )
+    previous_state = state_repository.load()
     logger.info("Expedientes previos cargados: %s", len(previous_state))
 
+    connector = PjnConnector(
+        tenant_id=tenant_id,
+        connector_id=connector_id,
+        collector=collect_expedientes,
+    )
+
     try:
-        current_items = collect_expedientes(
+        sync_result = connector.sync(
             username=pjn_user,
             password=pjn_pass,
+            previous_cases=previous_state,
             headless=headless,
             timeout_ms=timeout_ms,
             max_attempts=retries,
@@ -102,18 +121,39 @@ def run_monitor() -> int:
         logger.error("Fallo general de scraping: %s", exc)
         return 1
 
-    current_state = set(current_items)
-    new_expedientes = detect_new(current_state, previous_state)
-    logger.info("Expedientes actuales detectados: %s", len(current_state))
+    logger.info("Expedientes actuales detectados: %s", len(sync_result.current_cases))
+    logger.info("Eventos canonicos preparados: %s", len(sync_result.events))
 
-    if new_expedientes:
-        logger.info("Nuevos expedientes detectados: %s", len(new_expedientes))
+    if database_url:
         try:
-            send_new_expedientes_email(
-                smtp_user=email_user,
-                smtp_pass=email_pass,
-                recipient=alert_email,
-                expedientes=new_expedientes,
+            persisted = NeonEventSink(
+                database_url=database_url,
+                tenant_id=tenant_id,
+                connector_id=connector_id,
+                trigger=os.getenv("PJN_SYNC_TRIGGER", "SCHEDULE"),
+            ).persist(sync_result)
+            logger.info(
+                "Corrida persistida en Neon: sync_run=%s eventos_insertados=%s",
+                persisted.sync_run_id,
+                persisted.inserted_events,
+            )
+        except NeonPersistenceError as exc:
+            logger.error("Fallo de persistencia Neon: %s", exc)
+            if neon_required:
+                return 8
+    else:
+        logger.info("Neon dual-write desactivado: DATABASE_URL no configurada.")
+
+    if sync_result.new_cases:
+        logger.info("Nuevos expedientes detectados: %s", len(sync_result.new_cases))
+        notifier = SmtpNewCaseNotifier(
+            smtp_user=email_user,
+            smtp_pass=email_pass,
+            recipient=alert_email,
+        )
+        try:
+            notifier.notify(
+                expedientes=sync_result.new_cases,
                 timestamp=datetime.now().astimezone(),
             )
         except smtplib.SMTPAuthenticationError as exc:
@@ -133,7 +173,7 @@ def run_monitor() -> int:
         logger.info("No se detectaron expedientes nuevos.")
 
     try:
-        save_state(state_path, current_state, source_url=PJN_LIST_URL)
+        state_repository.save(sync_result.current_cases)
     except Exception as exc:
         logger.exception("No se pudo guardar state.json: %s", exc)
         return 7

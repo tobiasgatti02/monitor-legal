@@ -1,6 +1,27 @@
 .env
+.env.*
+!.env.example
 .venv/
 __pycache__/
 *.py[cod]
 *.log
 .DS_Store
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+node_modules/
+.next/
+*.tsbuildinfo
+
+# Los estados contienen datos de expedientes y no deben versionarse.
+state.json
+state_*.json
+!state.example.json
+
+# Evidencia y sesiones del navegador pueden contener datos sensibles.
+artifacts/
+playwright-report/
+test-results/
+*.trace.zip
+storage-state*.json

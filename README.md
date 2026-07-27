@@ -1,148 +1,181 @@
-# Monitor automatico PJN (expedientes nuevos + alerta email)
+# Monitor Legal
 
-Sistema de monitoreo 24/7 para detectar expedientes nuevos en el Poder Judicial de la Nacion Argentina y enviar alerta por email.
+Dashboard diario para estudios jurídicos argentinos. Reúne novedades judiciales, tareas,
+plazos, clientes y seguimientos en una vista operativa “Hoy”.
 
-## Decision tecnica importante
+La entrega conserva la automatización PJN existente para Gatti y Mazzarini, pero separa
+extracción, normalización, persistencia y notificaciones. Neon Postgres es la nueva fuente
+de verdad; el estado JSON continúa temporalmente como respaldo durante la migración.
 
-Se evaluo `requests + session scraping`, pero el flujo real observado redirige a SSO (Keycloak/OIDC) en `sso.pjn.gov.ar`, con tokens de sesion, redirects y formulario dinamico.
+## Estado actual
 
-Por estabilidad en produccion, se usa **Playwright** (navegador real) con modo headless, delays humanos leves, user-agent realista y selectores resilientes.
+- Monitor PJN con Playwright y dos jobs independientes en GitHub Actions.
+- Eventos judiciales canónicos, determinísticos e idempotentes.
+- Escritura dual opcional: JSON + Neon.
+- Esquema multi-tenant completo con roles, membresías, RLS y auditoría.
+- Better Auth estable sobre Neon para identidad y sesiones.
+- Dashboard “Hoy” responsive con modo demo sanitizado y lectura real desde Neon.
+- CI para Python y web: pruebas, lint, formato, tipos y build.
 
-## Estructura del proyecto
+Las pantallas restantes del producto (CRUD completo de clientes, causas, agenda,
+documentos, honorarios y administración de conectores) siguen el plan incremental en
+`docs/operations/migration-plan.md`.
+
+## Arquitectura
 
 ```text
-.
-  main.py
-  requirements.txt
-  state.json
-  .env.example
-  utils/
-    mailer.py
-    scraper.py
-    storage.py
-  .github/workflows/monitor.yml
-  README.md
+GitHub Actions / local worker
+  └─ PJN Playwright
+      └─ parser y normalizador
+          ├─ estado JSON temporal
+          ├─ alerta SMTP existente
+          └─ eventos + sync_runs en Neon
+
+Next.js
+  ├─ Better Auth sobre Neon
+  └─ consultas server-side con filtro tenant_id
 ```
 
-## Flujo automatico
+Directorios principales:
 
-1. Abre `https://scw.pjn.gov.ar/scw/consultaListaRelacionados.seam`
-2. Si corresponde, autentica en SSO PJN.
-3. Vuelve al listado de relacionados.
-4. Extrae expedientes desde tablas, filas, listas y anchors.
-5. Compara contra `state.json`.
-6. Si hay nuevos, envia email.
-7. Guarda nuevo estado.
+```text
+apps/web/                  Dashboard Next.js
+workers/common/            Contratos compartidos
+workers/pjn/               Conector, normalizador y sink Neon
+neon/migrations/           Esquema PostgreSQL y Better Auth
+neon/onboarding/           Alta inicial del estudio
+tests/                     Caracterización y contratos Python
+docs/                      ADR, seguridad y operación
+```
 
-## Requisitos
+## Desarrollo local
 
-- Python 3.12+
-- Cuenta Gmail para SMTP (recomendado App Password)
-- Credenciales PJN validas
-
-## Instalacion local
+Requisitos: Python 3.12+, Node.js 22+ y Chromium de Playwright.
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-pip install --upgrade pip
-pip install -r requirements.txt
+pip install -r requirements-dev.txt
 playwright install chromium
+
+npm ci
 cp .env.example .env
 ```
 
-Completar `.env` con tus valores reales.
-
-## Variables de entorno
-
-- `PJN_USER`: usuario PJN
-- `PJN_PASS`: password PJN
-- `EMAIL_USER`: gmail emisor
-- `EMAIL_PASS`: app password de gmail
-- `ALERT_EMAIL`: destino de alertas (default `Gattilegales@gmail.com`)
-- `PJN_HEADLESS`: `true` o `false`
-- `PJN_TIMEOUT_MS`: timeout de navegacion (default 45000)
-- `PJN_RETRIES`: reintentos de scraping (default 2)
-- `PJN_STATE_PATH`: ruta de estado JSON (default `state.json`)
-- `LOG_LEVEL`: `DEBUG`, `INFO`, `WARNING`, `ERROR`
-
-## Ejecucion local
+Ejecutar el worker:
 
 ```bash
 python main.py
 ```
 
-Codigos de salida:
+Ejecutar la web con datos ficticios:
 
-- `0`: OK
-- `2`: faltan variables requeridas
-- `3`: captcha/challenge detectado
-- `4`: login fallido
-- `5`: extraccion fallida
-- `6`: fallo de envio email
-- `7`: fallo guardando estado
-- `1`: fallo general scraping
+```bash
+MONITOR_LEGAL_DEMO=true npm run dev
+```
 
-## Deploy en GitHub Actions (cada 1 hora)
+Abrir `http://localhost:3000`. El modo demo nunca usa expedientes reales.
 
-Workflow: `.github/workflows/monitor.yml`
+## Configurar Neon
 
-Disparadores:
+Crear un proyecto en Neon y guardar la conexión pooled como `DATABASE_URL` y la conexión
+directa como `DATABASE_URL_UNPOOLED`. Aplicar:
 
-- `schedule: 0 * * * *`
-- `workflow_dispatch`
+```bash
+psql "$DATABASE_URL_UNPOOLED" \
+  -v ON_ERROR_STOP=1 \
+  -f neon/migrations/202607270001_foundation.sql
 
-### Secrets obligatorios en GitHub
+psql "$DATABASE_URL_UNPOOLED" \
+  -v ON_ERROR_STOP=1 \
+  -f neon/migrations/202607270002_better_auth.sql
+```
 
-En tu repo -> Settings -> Secrets and variables > Actions > New repository secret:
+Configurar la web:
 
-- `EMAIL_USER` (compartido para todos los usuarios)
-- `EMAIL_PASS` (compartido para todos los usuarios)
+```dotenv
+DATABASE_URL=postgresql://...
+BETTER_AUTH_URL=https://tu-dominio.example
+BETTER_AUTH_SECRET=un-secreto-aleatorio-de-al-menos-32-caracteres
+MONITOR_LEGAL_ALLOW_SIGN_UP=true
+MONITOR_LEGAL_DEMO=false
+```
 
-**Jobs separados en GitHub Actions:**
+La interfaz no ofrece registro público. Para el primer usuario:
 
-- `monitor-gatti` usa `PJN_USER_GATTI` / `PJN_PASS_GATTI` / `ALERT_EMAIL_GATTI`
-- `monitor-mazzarini` usa `PJN_USER_MAZZARINI` / `PJN_PASS_MAZZARINI` / `ALERT_EMAIL_MAZZARINI`
+```bash
+curl -X POST "https://tu-dominio.example/api/auth/sign-up/email" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Administrador","email":"admin@estudio.com","password":"una-clave-segura"}'
+```
 
-Cada job tiene su propio estado:
+Luego crear el tenant y ambos conectores:
 
-- `state_gatti.json`
-- `state_mazzarini.json`
+```bash
+psql "$DATABASE_URL_UNPOOLED" \
+  -v owner_email='admin@estudio.com' \
+  -v studio_name='Estudio Jurídico' \
+  -f neon/onboarding/create_studio.sql
+```
 
-Para el caso de Mazzarini, el mail de alerta debe ser `mazzariniagustin@gmail.com`.
+Después del alta inicial, cambiar `MONITOR_LEGAL_ALLOW_SIGN_UP=false` y volver a desplegar.
 
-## Persistencia de archivos de estado
+El procedimiento detallado y los secrets resultantes están en `neon/README.md`.
 
-El workflow:
+## Variables del worker PJN
 
-1. Ejecuta `monitor-gatti` y `monitor-mazzarini` como jobs separados.
-2. Cada job usa su cuenta PJN y su propio archivo de estado.
-3. Sube artifact del estado de cada cuenta en cada corrida.
+- `PJN_USER`, `PJN_PASS`: credenciales de una cuenta PJN.
+- `EMAIL_USER`, `EMAIL_PASS`: cuenta SMTP y App Password.
+- `ALERT_EMAIL`: destinatario de esa cuenta.
+- `PJN_HEADLESS`, `PJN_TIMEOUT_MS`, `PJN_RETRIES`: comportamiento del navegador.
+- `PJN_STATE_PATH`: estado JSON temporal de esa cuenta.
+- `DATABASE_URL`: conexión pooled de Neon; si falta, continúa el modo legado.
+- `MONITOR_TENANT_ID`: UUID del tenant existente.
+- `PJN_CONNECTOR_ID`: UUID del conector de esa cuenta.
+- `NEON_REQUIRED`: `false` durante reconciliación; `true` cuando Neon sea obligatorio.
+- `PJN_SYNC_TRIGGER`: `SCHEDULE` o `MANUAL`.
+- `LOG_LEVEL`: `DEBUG`, `INFO`, `WARNING` o `ERROR`.
 
-Esto permite continuidad de estado entre ejecuciones por usuario.
+La automatización conserva los nombres existentes:
+
+- Gatti: `PJN_USER_GATTI`, `PJN_PASS_GATTI`, `ALERT_EMAIL_GATTI`.
+- Mazzarini: `PJN_USER_MAZZARINI`, `PJN_PASS_MAZZARINI`,
+  `ALERT_EMAIL_MAZZARINI`.
+
+Para Neon, ambos jobs comparten `DATABASE_URL` y `MONITOR_TENANT_ID`; cada uno recibe su
+propio `PJN_CONNECTOR_ID_*`. El workflow comienza con `NEON_REQUIRED=false`, de modo que la
+activación no interrumpe las alertas actuales.
+
+## Códigos de salida
+
+- `0`: ejecución correcta.
+- `1`: error general de scraping.
+- `2`: faltan variables requeridas.
+- `3`: captcha o challenge detectado.
+- `4`: login PJN fallido.
+- `5`: extracción fallida.
+- `6`: envío SMTP fallido.
+- `7`: guardado de estado JSON fallido.
+- `8`: persistencia Neon fallida cuando `NEON_REQUIRED=true`.
+
+## Calidad
+
+```bash
+.venv/bin/pytest
+.venv/bin/ruff check .
+.venv/bin/ruff format --check .
+npm run lint:web
+npm run typecheck
+npm run test:web
+npm run build
+```
 
 ## Seguridad
 
-- No hay credenciales hardcodeadas en código.
-- Solo se usan variables de entorno/secrets.
-- `state_<user>.json` guarda solo expedientes detectados y metadatos (sin passwords).
+No versionar `.env`, conexiones, contraseñas ni archivos de estado reales. Los secrets se
+mantienen sólo en GitHub Actions y en el proveedor de despliegue. Las credenciales que se
+hayan compartido por texto deben rotarse antes de conectar cuentas reales.
 
-## Troubleshooting
-
-1. Login cae o queda en SSO:
-   - Verificar credenciales PJN.
-   - Revisar logs del job en Actions.
-2. Captcha detectado:
-   - El monitor sale con codigo 3 para no romper estado.
-   - Reintentar luego; algunos desafios son temporales.
-3. No extrae expedientes:
-   - Posible cambio de HTML en SCW.
-   - Activar `LOG_LEVEL=DEBUG` y revisar salida.
-4. Gmail rechaza login SMTP:
-   - Usar App Password, no password normal.
-   - Verificar que `EMAIL_USER` y `EMAIL_PASS` sean correctos.
-   - Si aparece `534 5.7.9 Application-specific password required`, activar verificacion en 2 pasos en Google y generar una App Password para `EMAIL_PASS`.
-
-## Nota de operacion 24/7
-
-GitHub Actions scheduler no garantiza ejecucion exacta al segundo, pero para monitoreo continuo gratuito es la alternativa mas estable sin servidor dedicado.
+La limpieza del antiguo `state.json` en el historial Git es una operación separada: el
+archivo ya no está en la rama actual, pero los objetos históricos no fueron reescritos.
+Ver `docs/security/audit-2026-07-27.md`.

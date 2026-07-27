@@ -9,7 +9,7 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: pjn-monitor
@@ -57,6 +57,11 @@ jobs:
           PJN_TIMEOUT_MS: '45000'
           PJN_RETRIES: '2'
           PJN_STATE_PATH: state_gatti.json
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          MONITOR_TENANT_ID: ${{ secrets.MONITOR_TENANT_ID }}
+          PJN_CONNECTOR_ID: ${{ secrets.PJN_CONNECTOR_ID_GATTI }}
+          NEON_REQUIRED: ${{ vars.NEON_REQUIRED || 'false' }}
+          PJN_SYNC_TRIGGER: SCHEDULE
           LOG_LEVEL: INFO
           PYTHONUNBUFFERED: '1'
         run: python main.py
@@ -111,6 +116,11 @@ jobs:
           PJN_TIMEOUT_MS: '45000'
           PJN_RETRIES: '2'
           PJN_STATE_PATH: state_mazzarini.json
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          MONITOR_TENANT_ID: ${{ secrets.MONITOR_TENANT_ID }}
+          PJN_CONNECTOR_ID: ${{ secrets.PJN_CONNECTOR_ID_MAZZARINI }}
+          NEON_REQUIRED: ${{ vars.NEON_REQUIRED || 'false' }}
+          PJN_SYNC_TRIGGER: SCHEDULE
           LOG_LEVEL: INFO
           PYTHONUNBUFFERED: '1'
         run: python main.py

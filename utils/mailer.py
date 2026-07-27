@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 import smtplib
+from collections.abc import Sequence
 from datetime import datetime
 from email.message import EmailMessage
-from typing import Sequence
-
 
 SUBJECT_NEW_CASE = "Nuevo expediente detectado PJN"
 

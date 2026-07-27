@@ -10,12 +10,18 @@ from dataclasses import dataclass
 from playwright.sync_api import (
     Browser,
     BrowserContext,
-    Error as PlaywrightError,
     Page,
     Playwright,
-    TimeoutError as PlaywrightTimeoutError,
     sync_playwright,
 )
+from playwright.sync_api import (
+    Error as PlaywrightError,
+)
+from playwright.sync_api import (
+    TimeoutError as PlaywrightTimeoutError,
+)
+
+from workers.pjn.parsers.related_cases import extract_related_cases
 
 LOGGER = logging.getLogger(__name__)
 
@@ -89,7 +95,10 @@ NOISE_EXACT = {
 
 CASE_REGEXES = [
     re.compile(r"\b(?:[A-Z]{1,6}\s*)?\d{1,7}(?:[-.]\d{1,7})?/\d{2,4}\b"),
-    re.compile(r"\b(?:EXP(?:EDIENTE|TE)?\.?\s*)?[A-Z]{0,6}\s*\d{1,7}(?:[-.]\d{1,7})?/\d{2,4}\b", re.IGNORECASE),
+    re.compile(
+        r"\b(?:EXP(?:EDIENTE|TE)?\.?\s*)?[A-Z]{0,6}\s*\d{1,7}(?:[-.]\d{1,7})?/\d{2,4}\b",
+        re.IGNORECASE,
+    ),
     re.compile(r"\b\d{1,7}/\d{2,4}\b"),
 ]
 
@@ -182,7 +191,9 @@ def collect_expedientes(
     raise ScraperError("Fallo desconocido al extraer expedientes.")
 
 
-def _run_once(playwright: Playwright, username: str, password: str, config: ScrapeConfig) -> list[str]:
+def _run_once(
+    playwright: Playwright, username: str, password: str, config: ScrapeConfig
+) -> list[str]:
     browser: Browser = playwright.chromium.launch(
         headless=config.headless,
         args=[
@@ -219,7 +230,9 @@ def _run_once(playwright: Playwright, username: str, password: str, config: Scra
         _wait_for_settle(page, config.timeout_ms)
 
         if _is_on_login_page(page):
-            raise LoginError("No se pudo establecer sesion en PJN. Sigue apareciendo el formulario de login.")
+            raise LoginError(
+                "No se pudo establecer sesion en PJN. Sigue apareciendo el formulario de login."
+            )
 
         if _captcha_present(page):
             raise CaptchaDetectedError("Captcha detectado luego de autenticar.")
@@ -227,7 +240,8 @@ def _run_once(playwright: Playwright, username: str, password: str, config: Scra
         expedientes = extract_expedientes(page)
         if not expedientes:
             raise ExtractionError(
-                "No se pudieron extraer expedientes. Posible cambio de HTML o lista vacia.")
+                "No se pudieron extraer expedientes. Posible cambio de HTML o lista vacia."
+            )
 
         return expedientes
     finally:
@@ -326,10 +340,7 @@ def _is_on_login_page(page: Page) -> bool:
         if page.locator(selector).count() > 0:
             return True
 
-    if page.locator("#username").count() > 0 and page.locator("#password").count() > 0:
-        return True
-
-    return False
+    return page.locator("#username").count() > 0 and page.locator("#password").count() > 0
 
 
 def _captcha_present(page: Page) -> bool:
@@ -372,6 +383,14 @@ def _read_login_error(page: Page) -> str | None:
 
 
 def extract_expedientes(page: Page) -> list[str]:
+    try:
+        parsed_cases = extract_related_cases(page.content())
+    except Exception:
+        LOGGER.debug("El parser HTML puro fallo; se conserva el extractor legado.", exc_info=True)
+    else:
+        if parsed_cases:
+            return parsed_cases
+
     candidates: list[str] = []
 
     for selector in CANDIDATE_SELECTORS:
@@ -440,13 +459,12 @@ def _looks_like_expediente(text: str) -> bool:
     if any(regex.search(normalized) for regex in CASE_REGEXES):
         return True
 
-    if any(keyword in lowered for keyword in ("expte", "expediente", "causa", "legajo", "incidente")) and re.search(r"\d", normalized):
+    if any(
+        keyword in lowered for keyword in ("expte", "expediente", "causa", "legajo", "incidente")
+    ) and re.search(r"\d", normalized):
         return True
 
-    if "/" in normalized and re.search(r"\d", normalized):
-        return True
-
-    return False
+    return "/" in normalized and re.search(r"\d", normalized) is not None
 
 
 def _unique_keep_order(items) -> list[str]:
