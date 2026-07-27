@@ -67,7 +67,7 @@ export async function jsonBody<T>(request: Request, schema: ZodType<T>): Promise
     return schema.parse(await request.json());
   } catch (error) {
     if (error instanceof SyntaxError) {
-      throw new ApiError(400, "INVALID_JSON", "El cuerpo JSON no es válido.") from error;
+      throw new ApiError(400, "INVALID_JSON", "El cuerpo JSON no es válido.");
     }
     throw error;
   }

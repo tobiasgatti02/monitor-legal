@@ -231,13 +231,52 @@ export const alertUpdateSchema = z.object({
   snoozedUntil: optionalDate,
 });
 
+export const leadConvertSchema = z.object({
+  clientKind: z.enum(["PERSON", "COMPANY"]).default("PERSON"),
+  createCase: z.boolean().default(false),
+  caseTitle: z.string().trim().min(2).max(300).optional(),
+});
+
+export const communicationActionSchema = z.object({
+  action: z.enum(["SUBMIT", "APPROVE", "REJECT", "SEND"]),
+  note: optionalText,
+});
+
+export const clientPortalAccessSchema = z.object({
+  clientId: z.uuid(),
+  authUserId: z.string().trim().min(1),
+  expiresAt: optionalDate,
+});
+
+export const teamMemberSchema = z.object({
+  email: z.email(),
+  role: z.enum(["OWNER", "ADMIN", "LAWYER", "ASSISTANT", "READ_ONLY"]),
+});
+
+export const settingsUpdateSchema = z.object({
+  name: z.string().trim().min(2).max(200).optional(),
+  cuit: optionalText,
+  locality: optionalText,
+  email: z.email().optional().nullable(),
+  phone: optionalText,
+  whatsapp: optionalText,
+  morningDigest: z.boolean().optional(),
+  eveningDigest: z.boolean().optional(),
+  emailEnabled: z.boolean().optional(),
+  dashboardEnabled: z.boolean().optional(),
+  quietHoursStart: z.string().regex(/^\d{2}:\d{2}$/).optional().nullable(),
+  quietHoursEnd: z.string().regex(/^\d{2}:\d{2}$/).optional().nullable(),
+});
+
 export const clientUpdateSchema = clientCreateSchema.partial();
 export const caseUpdateSchema = caseCreateSchema.partial();
 export const leadUpdateSchema = leadFieldsSchema.partial();
 export const taskUpdateSchema = taskCreateSchema.partial();
 export const deadlineUpdateSchema = deadlineCreateSchema.partial();
 export const calendarUpdateSchema = calendarCreateSchema.partial();
-export const communicationUpdateSchema = communicationCreateSchema.partial();
+export const communicationUpdateSchema = communicationCreateSchema
+  .omit({ direction: true, status: true, sentAt: true })
+  .partial();
 export const feeUpdateSchema = feeCreateSchema.partial();
 export const paymentUpdateSchema = paymentCreateSchema.partial();
 export const integrationUpdateSchema = integrationCreateSchema.partial();

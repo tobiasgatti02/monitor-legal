@@ -4,6 +4,24 @@ on:
   schedule:
     - cron: '0 * * * *'
   workflow_dispatch:
+    inputs:
+      account:
+        description: Cuenta PJN a ejecutar
+        required: true
+        default: both
+        type: choice
+        options:
+          - both
+          - gatti
+          - mazzarini
+      operation:
+        description: Tipo de ejecución
+        required: true
+        default: SYNC
+        type: choice
+        options:
+          - SYNC
+          - TEST
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
@@ -17,6 +35,10 @@ concurrency:
 
 jobs:
   monitor-gatti:
+    if: >-
+      github.event_name != 'workflow_dispatch' ||
+      inputs.account == 'both' ||
+      inputs.account == 'gatti'
     runs-on: ubuntu-latest
     timeout-minutes: 12
 
@@ -76,6 +98,10 @@ jobs:
           retention-days: 7
 
   monitor-mazzarini:
+    if: >-
+      github.event_name != 'workflow_dispatch' ||
+      inputs.account == 'both' ||
+      inputs.account == 'mazzarini'
     runs-on: ubuntu-latest
     timeout-minutes: 12
 

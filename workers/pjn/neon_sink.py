@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from uuid import UUID
+import re
+from uuid import UUID, uuid5
 
 import psycopg
 from psycopg.types.json import Jsonb
@@ -21,6 +22,10 @@ class NeonPersistResult:
     inserted_events: int
 
 
+CASE_NAMESPACE = UUID("496f1723-287e-4f3b-8937-838c8468d91b")
+DOCKET_PATTERN = re.compile(r"\b([A-Z]{1,6}\s+\d{1,7}(?:[-.]\d{1,7})?/\d{2,4})\b")
+
+
 def _validated_uuid(value: str, variable_name: str) -> UUID:
     try:
         return UUID(value)
@@ -32,12 +37,14 @@ def _event_parameters(
     event: JudicialEvent,
     *,
     tenant_id: UUID,
+    case_id: UUID | None,
     connector_id: UUID,
     sync_run_id: UUID,
 ) -> tuple[object, ...]:
     return (
         UUID(event.id),
         tenant_id,
+        case_id,
         connector_id,
         sync_run_id,
         event.source.value,
@@ -56,6 +63,12 @@ def _event_parameters(
         event.possible_deadline,
         Jsonb(event.metadata),
     )
+
+
+def _new_case_identity(event: JudicialEvent) -> tuple[UUID, str | None]:
+    docket_match = DOCKET_PATTERN.search(event.normalized_text.upper())
+    docket_number = docket_match.group(1) if docket_match else None
+    return uuid5(CASE_NAMESPACE, event.id), docket_number
 
 
 class NeonEventSink:
@@ -87,11 +100,29 @@ class NeonEventSink:
             ):
                 cursor.execute(
                     """
+                    select t.created_by
+                      from public.tenants t
+                      join public.users u on u.id = t.created_by
+                     where t.id = %s
+                     limit 1
+                    """,
+                    (self._tenant_id,),
+                )
+                actor_row = cursor.fetchone()
+                if actor_row is None:
+                    raise NeonPersistenceError(
+                        "El tenant no tiene un usuario propietario válido para el worker"
+                    )
+                system_actor = str(actor_row[0])
+
+                cursor.execute(
+                    """
                         insert into public.sync_runs (
                           tenant_id, connector_id, status, trigger,
-                          started_at, completed_at, cases_checked, events_detected
+                          started_at, completed_at, cases_checked, events_detected,
+                          created_by
                         )
-                        values (%s, %s, 'SUCCEEDED', %s, %s, %s, %s, %s)
+                        values (%s, %s, 'SUCCEEDED', %s, %s, %s, %s, %s, %s)
                         returning id
                         """,
                     (
@@ -102,6 +133,7 @@ class NeonEventSink:
                         now,
                         len(sync_result.current_cases),
                         len(sync_result.events),
+                        system_actor,
                     ),
                 )
                 row = cursor.fetchone()
@@ -111,10 +143,68 @@ class NeonEventSink:
 
                 inserted_events = 0
                 for event in sync_result.events:
+                    case_id: UUID | None = None
+                    if event.event_type.value == "NEW_CASE":
+                        case_id, docket_number = _new_case_identity(event)
+                        cursor.execute(
+                            """
+                            insert into public.cases (
+                              id, tenant_id, docket_number, title, jurisdiction,
+                              status, priority, last_movement_at, created_by
+                            )
+                            values (%s, %s, %s, %s, 'PJN', 'ACTIVE', 'MEDIUM', %s, %s)
+                            on conflict (id) do update
+                              set title = excluded.title,
+                                  docket_number = coalesce(
+                                    public.cases.docket_number,
+                                    excluded.docket_number
+                                  ),
+                                  last_movement_at = greatest(
+                                    public.cases.last_movement_at,
+                                    excluded.last_movement_at
+                                  )
+                            """,
+                            (
+                                case_id,
+                                self._tenant_id,
+                                docket_number,
+                                event.normalized_text,
+                                event.detected_at,
+                                system_actor,
+                            ),
+                        )
+                        cursor.execute(
+                            """
+                            insert into public.case_sources (
+                              tenant_id, case_id, connector_id, source,
+                              source_case_id, source_url, last_synced_at,
+                              content_hash, created_by
+                            )
+                            values (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                            on conflict (tenant_id, connector_id, source_case_id)
+                            do update set
+                              case_id = excluded.case_id,
+                              source_url = excluded.source_url,
+                              last_synced_at = excluded.last_synced_at,
+                              content_hash = excluded.content_hash
+                            """,
+                            (
+                                self._tenant_id,
+                                case_id,
+                                self._connector_id,
+                                event.source.value,
+                                docket_number or event.content_hash,
+                                event.source_url,
+                                event.detected_at,
+                                event.content_hash,
+                                system_actor,
+                            ),
+                        )
+
                     cursor.execute(
                         """
                             insert into public.judicial_events (
-                              id, tenant_id, connector_id, sync_run_id, source,
+                              id, tenant_id, case_id, connector_id, sync_run_id, source,
                               source_event_id, source_url, event_type, source_date,
                               detected_at, title, original_text, normalized_text,
                               content_hash, severity, review_status,
@@ -122,18 +212,58 @@ class NeonEventSink:
                             )
                             values (
                               %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                              %s, %s, %s, %s, %s, %s, %s, %s, %s
+                              %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
                             )
                             on conflict do nothing
                             """,
                         _event_parameters(
                             event,
                             tenant_id=self._tenant_id,
+                            case_id=case_id,
                             connector_id=self._connector_id,
                             sync_run_id=sync_run_id,
                         ),
                     )
-                    inserted_events += cursor.rowcount
+                    event_inserted = cursor.rowcount
+                    inserted_events += event_inserted
+                    if event_inserted:
+                        cursor.execute(
+                            """
+                            insert into public.notifications (
+                              tenant_id, user_id, event_id, channel, priority,
+                              title, body, idempotency_key, created_by
+                            )
+                            select %s, tm.user_id, %s, 'DASHBOARD', %s,
+                                   %s, %s, %s, %s
+                              from public.tenant_members tm
+                             where tm.tenant_id = %s and tm.active
+                            on conflict (tenant_id, user_id, idempotency_key)
+                            do nothing
+                            """,
+                            (
+                                self._tenant_id,
+                                UUID(event.id),
+                                event.severity.value,
+                                event.title,
+                                event.original_text,
+                                f"judicial-event:{event.id}",
+                                system_actor,
+                                self._tenant_id,
+                            ),
+                        )
+
+                cursor.execute(
+                    """
+                    update public.connectors
+                       set status = 'CONNECTED',
+                           last_attempt_at = %s,
+                           last_success_at = %s,
+                           last_error_code = null,
+                           last_error_message = null
+                     where tenant_id = %s and id = %s
+                    """,
+                    (now, now, self._tenant_id, self._connector_id),
+                )
 
                 cursor.execute(
                     """

@@ -16,6 +16,7 @@
     "clsx": "2.1.1",
     "lucide-react": "1.27.0",
     "next": "16.2.12",
+    "nodemailer": "^7.0.11",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "tailwind-merge": "3.6.0",
@@ -24,6 +25,7 @@
   "devDependencies": {
     "@tailwindcss/postcss": "4.3.3",
     "@types/node": "26.1.2",
+    "@types/nodemailer": "^7.0.10",
     "@types/react": "19.2.17",
     "@types/react-dom": "19.2.3",
     "eslint": "9.39.5",

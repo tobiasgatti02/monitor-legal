@@ -16,6 +16,7 @@ import {
   UserSearch,
 } from "lucide-react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 
 const navigation = [
@@ -36,6 +37,8 @@ const navigation = [
 const mobileNavigation = navigation.slice(0, 5);
 
 export function AppShell({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
+
   return (
     <div className="app-frame">
       <aside className="sidebar" aria-label="Navegación principal">
@@ -51,7 +54,11 @@ export function AppShell({ children }: { children: ReactNode }) {
         <nav className="side-nav">
           {navigation.map((item) => (
             <Link
-              className={item.href === "/" ? "nav-item nav-item-active" : "nav-item"}
+              className={
+                pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href))
+                  ? "nav-item nav-item-active"
+                  : "nav-item"
+              }
               href={item.href}
               key={item.href}
             >
@@ -71,9 +78,9 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
 
         <div className="profile-compact">
-          <span className="avatar">TG</span>
+          <span className="avatar">AG</span>
           <div>
-            <strong>Tobias Gatti</strong>
+            <strong>Agustín Gatti</strong>
             <span>Propietario</span>
           </div>
           <Menu size={18} />
@@ -95,7 +102,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               <Bell size={19} />
               <span className="notification-dot" />
             </Link>
-            <span className="top-avatar">TG</span>
+            <span className="top-avatar">AG</span>
           </div>
         </header>
         <main className="main-content">{children}</main>
@@ -104,7 +111,11 @@ export function AppShell({ children }: { children: ReactNode }) {
       <nav className="mobile-nav" aria-label="Navegación móvil">
         {mobileNavigation.map((item) => (
           <Link
-            className={item.href === "/" ? "mobile-nav-item active" : "mobile-nav-item"}
+            className={
+              pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href))
+                ? "mobile-nav-item active"
+                : "mobile-nav-item"
+            }
             href={item.href}
             key={item.href}
           >
@@ -116,3 +127,4 @@ export function AppShell({ children }: { children: ReactNode }) {
     </div>
   );
 }
+"use client";

@@ -1,7 +1,7 @@
 import type { TodayDashboard } from "@/lib/dashboard";
 
 export const demoDashboard: TodayDashboard = {
-  actorName: "Tobias",
+  actorName: "Agustín",
   dateLabel: "Lunes 27 de julio",
   summary: {
     urgent: 2,
@@ -22,7 +22,7 @@ export const demoDashboard: TodayDashboard = {
       source: "PJN",
       relativeTime: "hace 24 min",
       reason: "Contiene términos asociados a traslado. Requiere revisión profesional.",
-      owner: "Tobias Gatti",
+      owner: "Agustín Gatti",
       priority: "CRITICAL",
       primaryAction: "Revisar",
     },
@@ -58,7 +58,7 @@ export const demoDashboard: TodayDashboard = {
       source: "ESTUDIO",
       relativeTime: "hace 3 días",
       reason: "Hay una novedad revisada que todavía no fue comunicada.",
-      owner: "Tobias Gatti",
+      owner: "Agustín Gatti",
       priority: "MEDIUM",
       primaryAction: "Redactar mensaje",
     },

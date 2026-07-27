@@ -467,7 +467,7 @@ export async function listResource(
   forcedFilters: Record<string, string> = {},
 ): Promise<Response> {
   const context = await apiContext(request);
-  const config = resources[resource];
+  const config: ResourceConfig = resources[resource];
   const url = new URL(request.url);
   const pagination = paginationFrom(request);
   const conditions = ["tenant_id = $1"];
@@ -524,9 +524,10 @@ export async function getResource(
   resource: ResourceName,
 ): Promise<Response> {
   const context = await apiContext(request);
+  const config: ResourceConfig = resources[resource];
   const id = (await route?.params)?.id;
   if (!id) throw new ApiError(400, "ID_REQUIRED", "Falta el identificador.");
-  return response(await readOne(context, resources[resource], id));
+  return response(await readOne(context, config, id));
 }
 
 export async function createResource(
@@ -536,7 +537,7 @@ export async function createResource(
 ): Promise<Response> {
   const context = await apiContext(request);
   requireWrite(context);
-  const config = resources[resource];
+  const config: ResourceConfig = resources[resource];
   const input = {
     ...(await jsonBody(request, config.createSchema)),
     ...forced,
@@ -565,11 +566,27 @@ export async function updateResource(
 ): Promise<Response> {
   const context = await apiContext(request);
   requireWrite(context);
-  const config = resources[resource];
+  const config: ResourceConfig = resources[resource];
   const id = (await route?.params)?.id;
   if (!id) throw new ApiError(400, "ID_REQUIRED", "Falta el identificador.");
-  await readOne(context, config, id);
+  const previous = await readOne(context, config, id);
   const input = await jsonBody(request, config.updateSchema);
+  if (resource === "communications" && previous.status !== "DRAFT") {
+    throw new ApiError(
+      409,
+      "COMMUNICATION_LOCKED",
+      "Sólo pueden editarse comunicaciones en borrador.",
+    );
+  }
+  if (
+    resource === "leads" &&
+    typeof input.status === "string" &&
+    ["NOT_HIRED", "NO_RESPONSE", "CONFLICT", "OUT_OF_SCOPE"].includes(input.status) &&
+    !input.lostReason &&
+    !previous.lostReason
+  ) {
+    throw new ApiError(422, "LOST_REASON_REQUIRED", "Indicá el motivo de cierre del lead.");
+  }
   await ensureReferences(context, config, input);
   const mapped = mappedValues(config, input);
   if (mapped.columns.length === 0) {
@@ -583,6 +600,27 @@ export async function updateResource(
       where tenant_id = $${values.length - 1} and id = $${values.length}`,
     values,
   );
+  if (resource === "tasks" && typeof input.status === "string") {
+    await db().query(
+      `update public.tasks
+          set completed_at = case when status = 'DONE' then coalesce(completed_at, now())
+                                  else null end
+        where tenant_id = $1 and id = $2`,
+      [context.tenantId, id],
+    );
+  }
+  if (resource === "deadlines") {
+    const dueAtChanged = typeof input.dueAt === "string" && input.dueAt !== previous.dueAt;
+    await db().query(
+      `update public.deadlines
+          set previous_due_at = case when $3 then $4::timestamptz else previous_due_at end,
+              confirmed_by = case when status = 'CONFIRMED' then $5 else confirmed_by end,
+              confirmed_at = case when status = 'CONFIRMED'
+                                  then coalesce(confirmed_at, now()) else confirmed_at end
+        where tenant_id = $1 and id = $2`,
+      [context.tenantId, id, dueAtChanged, previous.dueAt ?? null, context.actorId],
+    );
+  }
   await audit(context, `${config.name.toUpperCase()}_UPDATED`, config.name, id, {
     fields: Object.keys(input),
   });
@@ -596,7 +634,7 @@ export async function deleteResource(
 ): Promise<Response> {
   const context = await apiContext(request);
   requireWrite(context);
-  const config = resources[resource];
+  const config: ResourceConfig = resources[resource];
   const id = (await route?.params)?.id;
   if (!id) throw new ApiError(400, "ID_REQUIRED", "Falta el identificador.");
   await readOne(context, config, id);
