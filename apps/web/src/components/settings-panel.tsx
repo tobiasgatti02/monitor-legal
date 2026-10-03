@@ -77,10 +77,16 @@ export function SettingsPanel({ demo }: { demo: boolean }) {
     };
     try {
       if (!demo) {
+        const requestPayload = {
+          ...payload,
+          email: payload.email || null,
+          quietHoursStart: payload.quietHoursStart || null,
+          quietHoursEnd: payload.quietHoursEnd || null,
+        };
         const result = await fetch("/api/settings", {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
+          body: JSON.stringify(requestPayload),
         });
         const body = (await result.json()) as { error?: { message?: string } };
         if (!result.ok) throw new Error(body.error?.message ?? "No se pudo guardar.");

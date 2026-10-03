@@ -85,6 +85,21 @@ def run_monitor() -> int:
     connector_id = os.getenv("PJN_CONNECTOR_ID", DEFAULT_CONNECTOR_ID)
     database_url = os.getenv("DATABASE_URL")
     neon_required = _bool_env("NEON_REQUIRED", False)
+    job_id = os.getenv("MONITOR_JOB_ID")
+
+    def record_connector_failure(error_code: str, error: Exception) -> None:
+        if not database_url:
+            return
+        try:
+            NeonEventSink(
+                database_url=database_url,
+                tenant_id=tenant_id,
+                connector_id=connector_id,
+                trigger=os.getenv("PJN_SYNC_TRIGGER", "SCHEDULE"),
+                job_id=job_id,
+            ).record_failure(error_code, str(error))
+        except NeonPersistenceError as persistence_error:
+            logger.warning("No se pudo registrar el fallo del conector: %s", persistence_error)
 
     state_repository = JsonCaseStateRepository(
         state_path=state_path,
@@ -110,15 +125,19 @@ def run_monitor() -> int:
         )
     except CaptchaDetectedError as exc:
         logger.error("Captcha o challenge anti-bot detectado: %s", exc)
+        record_connector_failure("CAPTCHA_DETECTED", exc)
         return 3
     except LoginError as exc:
         logger.error("Fallo de login PJN: %s", exc)
+        record_connector_failure("AUTH_FAILED", exc)
         return 4
     except ExtractionError as exc:
         logger.error("Fallo de extraccion de expedientes: %s", exc)
+        record_connector_failure("PARSING_FAILED", exc)
         return 5
     except ScraperError as exc:
         logger.error("Fallo general de scraping: %s", exc)
+        record_connector_failure("UNKNOWN", exc)
         return 1
 
     logger.info("Expedientes actuales detectados: %s", len(sync_result.current_cases))
@@ -131,6 +150,7 @@ def run_monitor() -> int:
                 tenant_id=tenant_id,
                 connector_id=connector_id,
                 trigger=os.getenv("PJN_SYNC_TRIGGER", "SCHEDULE"),
+                job_id=job_id,
             ).persist(sync_result)
             logger.info(
                 "Corrida persistida en Neon: sync_run=%s eventos_insertados=%s",

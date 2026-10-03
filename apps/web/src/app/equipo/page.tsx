@@ -1,3 +1,4 @@
+import { TeamInvitations } from "@/components/team-invitations";
 import { AppShell } from "@/components/app-shell";
 import { ResourceWorkspace } from "@/components/resource-workspace";
 import { demoMode } from "@/lib/demo-mode";
@@ -5,6 +6,7 @@ import { demoMode } from "@/lib/demo-mode";
 export default function TeamPage() {
   return (
     <AppShell>
+      <TeamInvitations/>
       <ResourceWorkspace
         title="Equipo"
         description="Miembros del estudio y permisos. El alta pública permanece desactivada."

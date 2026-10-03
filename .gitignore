@@ -25,3 +25,7 @@ playwright-report/
 test-results/
 *.trace.zip
 storage-state*.json
+.vercel
+.env*
+
+.private/

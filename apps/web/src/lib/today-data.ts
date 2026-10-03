@@ -8,6 +8,7 @@ import {
   type TodayDashboard,
 } from "@/lib/dashboard";
 import { db, isDatabaseConfigured } from "@/lib/db";
+import { demoMode } from "@/lib/demo-mode";
 
 type MembershipRow = {
   tenant_id: string;
@@ -34,6 +35,7 @@ type EventRow = {
   original_text: string;
   owner: string | null;
   severity: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+  source_url: string | null;
 };
 
 type TaskRow = {
@@ -104,14 +106,14 @@ function numberValue(value: string): number {
 }
 
 export async function getTodayDashboard(actorId: string): Promise<TodayDashboard> {
-  const demoEnabled =
-    process.env.MONITOR_LEGAL_DEMO === "true" || !isDatabaseConfigured();
+  const demoEnabled = demoMode();
   if (demoEnabled) {
     return todayDashboardSchema.parse({
       ...demoDashboard,
       dateLabel: dateLabel(),
     });
   }
+  if (!isDatabaseConfigured()) throw new Error("La base del estudio no está configurada.");
 
   const sql = db();
   const memberships = (await sql.query(
@@ -160,7 +162,7 @@ export async function getTodayDashboard(actorId: string): Promise<TodayDashboard
       ),
       sql.query(
         `select e.id, e.title, coalesce(c.title, c.docket_number) as context, e.source,
-                e.detected_at, e.original_text,
+                e.detected_at, e.original_text, e.source_url,
                 coalesce(u.full_name, 'Sin asignar') as owner, e.severity
            from public.judicial_events e
            left join public.cases c on c.id = e.case_id
@@ -267,6 +269,7 @@ export async function getTodayDashboard(actorId: string): Promise<TodayDashboard
         owner: event.owner ?? "Sin asignar",
         priority: event.severity,
         primaryAction: "Revisar",
+        sourceUrl: event.source_url,
       })),
     ),
     agenda: taskRows.map((task) => ({

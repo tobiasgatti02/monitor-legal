@@ -1,0 +1,76 @@
+import fs from 'node:fs';
+import assert from 'node:assert/strict';
+import { createHmac, randomUUID } from 'node:crypto';
+import { neon } from '@neondatabase/serverless';
+import { hashPassword } from 'better-auth/crypto';
+const env=Object.fromEntries(fs.readFileSync('apps/web/.env.local','utf8').split('\n').filter(s=>s.includes('=')&&!s.startsWith('#')).map(s=>{const i=s.indexOf('=');return [s.slice(0,i),s.slice(i+1)];}));
+if(env.MONITOR_LEGAL_VALIDATION!=='true')throw new Error('Run this test only on an isolated validation branch');
+const base='http://localhost:3000',sql=neon(env.DATABASE_AUTH_URL),password='Validation-only-legal-2026!';
+const report=[];
+let ownerCookie='';
+async function request(path,body,cookie=ownerCookie,method=body?'POST':'GET'){
+ const r=await fetch(base+path,{method,headers:{...(body?{'Content-Type':'application/json'}:{}),...(cookie?{Cookie:cookie}:{}),Origin:base},...(body?{body:JSON.stringify(body)}:{})});
+ const text=await r.text();let json;try{json=JSON.parse(text);}catch{json={raw:text.slice(0,200)};}
+ return {status:r.status,json,headers:r.headers};
+}
+function check(name,condition,details){assert.ok(condition,`${name}: ${JSON.stringify(details)}`);report.push({name,passed:true});console.log('PASS',name);}
+const unauth=await request('/api/agent',undefined,'');check('Agent rejects unauthenticated requests',unauth.status===401,unauth);
+const setup=await request('/api/setup',{token:env.SETUP_TOKEN,name:'Validation Owner',username:'validation_owner',studio:'VALIDATION ONLY',email:'owner@validation.test',password},'');
+check('Private bootstrap',setup.status===200||setup.json.error?.code==='SETUP_COMPLETE',setup);
+const ownerId=randomUUID(),ownerEmail=ownerId+'@validation.test';
+await sql.query('insert into public."user"(id,name,email) values($1,$2,$3)',[ownerId,'Synthetic Validation Owner',ownerEmail]);
+await sql.query("insert into public.account(id,\"userId\",\"accountId\",\"providerId\",password) values($1,$2,$2,'credential',$3)",[randomUUID(),ownerId,await hashPassword(password)]);
+const studio=await sql.query("insert into tenants(name,created_by) values('SYNTHETIC VALIDATION ONLY',$1) returning id",[ownerId]);
+await sql.query("insert into tenant_members(tenant_id,user_id,role_code,created_by) values($1,$2,'OWNER',$2)",[studio[0].id,ownerId]);
+const login=await request('/api/auth/sign-in/email',{email:ownerEmail,password},'');
+check('Owner login',login.status===200,login);
+ownerCookie=login.headers.getSetCookie().map(c=>c.split(';')[0]).join('; ');
+const me=await request('/api/me');check('Membership from authenticated identity',me.status===200&&me.json.data.role==='OWNER',me);
+const actor=me.json.data,tenant=actor.tenantId;
+const created=await request('/api/cases',{title:'VALIDATION expediente A',docketNumber:'TEST-42'});check('Real case creation',created.status===201,created);
+const caseId=created.json.data.id;
+const privateCase=await request('/api/cases',{title:'VALIDATION expediente privado B'});check('Second case creation',privateCase.status===201,privateCase);
+const thread=await request('/api/agent',{message:'/causas',caseId,mode:'operations'});check('Typed tools answer without inference',thread.status===200&&thread.json.data.content.includes('TEST-42'),thread);
+const wrongOrigin=await fetch(base+'/api/agent',{method:'POST',headers:{Origin:'https://attacker.test','Content-Type':'application/json',Cookie:ownerCookie},body:JSON.stringify({message:'/causas'})});check('Cross-origin mutation blocked',wrongOrigin.status===403);
+const closed=await request('/api/auth/sign-up/email',{email:'uninvited@validation.test',name:'Uninvited',password},'');check('Public registration stays closed',closed.status>=400,closed);
+const lawyer=randomUUID();
+await sql.query('insert into public."user"(id,name,email) values($1,$2,$3)',[lawyer,'Validation Lawyer',lawyer+'@validation.test']);
+await sql.query('insert into public.account(id,"userId","accountId","providerId",password) values($1,$2,$2,\'credential\',$3)',[randomUUID(),lawyer,await hashPassword(password)]);
+await sql.query('insert into tenant_members(tenant_id,user_id,role_code,created_by) values($1,$2,\'LAWYER\',$3)',[tenant,lawyer,actor.actorId]);
+await sql.query('insert into case_assignments(tenant_id,case_id,user_id,created_by) values($1,$2,$3,$4)',[tenant,caseId,lawyer,actor.actorId]);
+const lawyerLogin=await request('/api/auth/sign-in/email',{email:lawyer+'@validation.test',password},'');check('Lawyer login',lawyerLogin.status===200,lawyerLogin);
+const lawyerCookie=lawyerLogin.headers.getSetCookie().map(c=>c.split(';')[0]).join('; ');
+const cases=await request('/api/cases',undefined,lawyerCookie);check('RLS filters unassigned cases',cases.status===200&&cases.json.data.some(c=>c.id===caseId)&&!cases.json.data.some(c=>c.id===privateCase.json.data.id),cases);
+const denied=await request('/api/cases/'+privateCase.json.data.id,undefined,lawyerCookie);check('Direct private-case read denied',denied.status===404,denied);
+const body=Buffer.from('DOCUMENTO SINTÉTICO DE VALIDACIÓN. El contrato de prueba TEST-42 establece un canon ficticio de 1200 unidades. La cláusula de revisión se denomina ZAFIRO. No es asesoramiento jurídico.');
+const ticket=await request('/api/knowledge/upload-ticket',{name:'VALIDATION-contrato.txt',mime:'text/plain',size:body.length,caseId});check('Scoped upload ticket',ticket.status===200,ticket);
+const uploaded=await fetch(ticket.json.data.url,{method:'PUT',headers:{'Content-Type':'text/plain',Origin:base},body});check('Private R2 upload',uploaded.status===200,await uploaded.text());
+const overwrite=await fetch(ticket.json.data.url,{method:'PUT',headers:{'Content-Type':'text/plain',Origin:base},body});check('Original cannot be overwritten',overwrite.status===409,await overwrite.text());
+const final=await request('/api/knowledge/finalize',{id:ticket.json.data.id});check('Ingestion produces a usable index',final.status===201&&final.json.data.ingestion.status==='READY',final);
+const source=await request('/api/knowledge/'+ticket.json.data.id+'/source',undefined,lawyerCookie);check('Authorized original source opens',source.status===200&&source.json.raw.includes('ZAFIRO'),source);
+const search=await request('/api/agent',{message:'/buscar ZAFIRO',caseId,mode:'research'},lawyerCookie);check('Knowledge answer cites exact source',search.status===200&&search.json.data.citations[0]?.documentId===ticket.json.data.id,search);
+const semantic=await request('/api/agent',{message:'¿Qué importe figura en el documento de prueba? Citá la fuente. /no_think',caseId,mode:'research'},lawyerCookie);check('Live model gives a grounded answer',semantic.status===200&&semantic.json.data.content.includes('1200')&&semantic.json.data.citations.length>0,semantic);
+await sql.query('delete from case_assignments where tenant_id=$1 and case_id=$2 and user_id=$3',[tenant,caseId,lawyer]);
+const revoked=await request('/api/knowledge/'+ticket.json.data.id+'/source',undefined,lawyerCookie);check('Revocation blocks original immediately',revoked.status===404,revoked);
+const revokedHistory=await request('/api/agent/threads/'+search.json.data.threadId,undefined,lawyerCookie);check('Revocation blocks matter-scoped history',revokedHistory.status===404,revokedHistory);
+const externalTenant=randomUUID();
+await sql.query('insert into tenants(id,name,created_by) values($1,\'OTHER VALIDATION TENANT\',$2)',[externalTenant,actor.actorId]);
+await sql.query('insert into cases(tenant_id,title,created_by) values($1,\'TENANT SECRET\',$2)',[externalTenant,actor.actorId]);
+const cross=await request('/api/cases?search=TENANT');check('Tenant boundary enforced',cross.status===200&&cross.json.data.length===0,cross);
+// Actions must be explicitly approved once; model proposals themselves write no task.
+const proposal=randomUUID();
+await sql.query("insert into agent_approvals(id,tenant_id,user_id,thread_id,case_id,action,payload) values($1,$2,$3,$4,$5,'CREATE_TASK',$6::jsonb)",[proposal,tenant,actor.actorId,thread.json.data.threadId,caseId,JSON.stringify({title:'SYNTHETIC approval task',body:'Validation only'})]);
+let before=await sql.query("select count(*)::int as n from tasks where tenant_id=$1 and title='SYNTHETIC approval task'",[tenant]);check('Proposal has no side effect',before[0].n===0);
+const approved=await request('/api/agent/approvals/'+proposal,{decision:'APPROVE'});check('Human approval creates the task',approved.status===200&&approved.json.data.resultId,approved);
+const repeated=await request('/api/agent/approvals/'+proposal,{decision:'APPROVE'});check('Approval replay is rejected',repeated.status===409,repeated);
+let after=await sql.query("select count(*)::int as n from tasks where tenant_id=$1 and title='SYNTHETIC approval task'",[tenant]);check('Approval is idempotent',after[0].n===1);
+const enable=await request('/api/auth/two-factor/enable',{password});check('MFA enrollment',enable.status===200&&enable.json.totpURI, {status:enable.status});
+function totp(uri){const secret=new URL(uri).searchParams.get('secret');let bits='';for(const c of secret.toUpperCase())bits+='ABCDEFGHIJKLMNOPQRSTUVWXYZ234567'.indexOf(c).toString(2).padStart(5,'0');const bytes=[];for(let i=0;i+8<=bits.length;i+=8)bytes.push(parseInt(bits.slice(i,i+8),2));const t=Buffer.alloc(8);t.writeBigUInt64BE(BigInt(Math.floor(Date.now()/30000)));const h=createHmac('sha1',Buffer.from(bytes)).update(t).digest(),o=h[19]&15;return ((h.readUInt32BE(o)&0x7fffffff)%1000000).toString().padStart(6,'0');}
+const verify=await request('/api/auth/two-factor/verify-totp',{code:totp(enable.json.totpURI),trustDevice:false});check('MFA activation verifies a real TOTP',verify.status===200,{status:verify.status});
+const newLogin=await request('/api/auth/sign-in/email',{email:ownerEmail,password},'');check('Password alone requires second factor',newLogin.status===200&&newLogin.json.twoFactorRedirect===true,{status:newLogin.status,twoFactorRedirect:newLogin.json.twoFactorRedirect});
+const pendingCookie=newLogin.headers.getSetCookie().map(c=>c.split(';')[0]).join('; ');
+const deniedSession=await request('/api/me',undefined,pendingCookie);check('Pending MFA has no application access',deniedSession.status===401,{status:deniedSession.status});
+const completed=await request('/api/auth/two-factor/verify-totp',{code:totp(enable.json.totpURI),trustDevice:false},pendingCookie);check('MFA completes login',completed.status===200,{status:completed.status});
+fs.writeFileSync('/tmp/monitor-legal-validation-session.json',JSON.stringify({cookie:ownerCookie,email:ownerEmail,password}),{mode:0o600});
+fs.writeFileSync('/tmp/monitor-legal-e2e-report.json',JSON.stringify(report,null,2));
+console.log(JSON.stringify({passed:report.length,isolatedBranch:true}));

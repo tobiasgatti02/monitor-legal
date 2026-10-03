@@ -87,7 +87,6 @@ export function ResourceWorkspace({
   useEffect(() => {
     if (demo) return;
     const controller = new AbortController();
-    setLoading(true);
     fetch(`${endpoint}?limit=50`, { signal: controller.signal })
       .then(async (result) => {
         const payload = (await result.json()) as {

@@ -59,6 +59,7 @@ def test_run_monitor_notifies_only_when_there_are_new_cases(monkeypatch, tmp_pat
 
 
 def test_run_monitor_preserves_missing_env_exit_code(monkeypatch) -> None:
+    monkeypatch.setattr(main, "load_dotenv", Mock(return_value=False))
     for name in ("PJN_USER", "PJN_PASS", "EMAIL_USER", "EMAIL_PASS"):
         monkeypatch.delenv(name, raising=False)
 

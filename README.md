@@ -15,11 +15,14 @@ de verdad; el estado JSON continúa temporalmente como respaldo durante la migra
 - Esquema multi-tenant completo con roles, membresías, RLS y auditoría.
 - Better Auth estable sobre Neon para identidad y sesiones.
 - Dashboard “Hoy” responsive con modo demo sanitizado y lectura real desde Neon.
+- CRUD web y API para clientes, leads, causas, tareas, plazos, agenda, documentos,
+  honorarios, pagos, equipo, integraciones, alertas y configuración.
+- Flujo de borrador, aprobación y envío por Gmail SMTP o link de WhatsApp.
+- Documentos de hasta 5 MB almacenados en Neon con hash SHA-256.
 - CI para Python y web: pruebas, lint, formato, tipos y build.
 
-Las pantallas restantes del producto (CRUD completo de clientes, causas, agenda,
-documentos, honorarios y administración de conectores) siguen el plan incremental en
-`docs/operations/migration-plan.md`.
+Las etapas posteriores —conector MEV, agente local SCBA y portal externo del cliente—
+siguen el plan incremental en `docs/operations/migration-plan.md`.
 
 ## Arquitectura
 
@@ -89,6 +92,10 @@ psql "$DATABASE_URL_UNPOOLED" \
 psql "$DATABASE_URL_UNPOOLED" \
   -v ON_ERROR_STOP=1 \
   -f neon/migrations/202607270002_better_auth.sql
+
+psql "$DATABASE_URL_UNPOOLED" \
+  -v ON_ERROR_STOP=1 \
+  -f neon/migrations/202607270003_document_storage.sql
 ```
 
 Configurar la web:
@@ -101,7 +108,8 @@ MONITOR_LEGAL_ALLOW_SIGN_UP=true
 MONITOR_LEGAL_DEMO=false
 ```
 
-La interfaz no ofrece registro público. Para el primer usuario:
+No se configura ningún proveedor OAuth. La interfaz no ofrece registro público. Para el
+primer usuario, habilitar el alta sólo durante este paso:
 
 ```bash
 curl -X POST "https://tu-dominio.example/api/auth/sign-up/email" \
@@ -146,6 +154,14 @@ Para Neon, ambos jobs comparten `DATABASE_URL` y `MONITOR_TENANT_ID`; cada uno r
 propio `PJN_CONNECTOR_ID_*`. El workflow comienza con `NEON_REQUIRED=false`, de modo que la
 activación no interrumpe las alertas actuales.
 
+Para que “Sincronizar ahora” despache GitHub Actions, la web necesita
+`GITHUB_REPOSITORY=tobiasgatti02/monitor-legal` y un `GITHUB_DISPATCH_TOKEN` de alcance
+mínimo para ejecutar workflows. Sin ese token, la API conserva el job en Neon para un
+worker.
+
+La matriz completa de rutas está en `docs/api/endpoints.md`; OpenAPI se sirve en
+`GET /api/openapi`.
+
 ## Códigos de salida
 
 - `0`: ejecución correcta.
@@ -179,3 +195,7 @@ hayan compartido por texto deben rotarse antes de conectar cuentas reales.
 La limpieza del antiguo `state.json` en el historial Git es una operación separada: el
 archivo ya no está en la rama actual, pero los objetos históricos no fueron reescritos.
 Ver `docs/security/audit-2026-07-27.md`.
+
+## Agente jurídico desplegado
+
+Aplicación: https://monitor-legal.vercel.app. Arquitectura, configuración inicial, límites, pruebas y operación en [docs/operations/legal-agent.md](docs/operations/legal-agent.md).

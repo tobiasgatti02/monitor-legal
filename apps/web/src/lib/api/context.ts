@@ -1,6 +1,7 @@
 import { auth, authConfigured } from "@/lib/auth/server";
 import { ApiError } from "@/lib/api/errors";
 import { db, isDatabaseConfigured } from "@/lib/db";
+import { setDbActor } from "@/lib/db-scope";
 
 export const tenantRoles = ["OWNER", "ADMIN", "LAWYER", "ASSISTANT", "READ_ONLY"] as const;
 export type TenantRole = (typeof tenantRoles)[number];
@@ -33,6 +34,7 @@ export async function apiContext(request: Request): Promise<ApiContext> {
   if (!session?.user) {
     throw new ApiError(401, "AUTH_REQUIRED", "Iniciá sesión para continuar.");
   }
+  setDbActor(session.user.id);
 
   const rows = (await db().query(
     `select tm.tenant_id, tm.role_code, t.name as tenant_name,

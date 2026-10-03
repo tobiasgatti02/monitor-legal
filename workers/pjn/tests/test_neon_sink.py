@@ -9,6 +9,7 @@ from workers.pjn.neon_sink import (
     NeonEventSink,
     NeonPersistenceError,
     _event_parameters,
+    _new_case_identity,
 )
 from workers.pjn.normalizer import new_case_event
 
@@ -41,3 +42,18 @@ def test_event_parameters_keep_canonical_evidence() -> None:
     assert parameters[8] == "NEW_CASE"
     assert parameters[12] == "FCR 42/2026 PERSONA EJEMPLO"
     assert parameters[14] == event.content_hash
+
+
+def test_new_case_identity_is_stable_and_extracts_docket() -> None:
+    event = new_case_event(
+        tenant_id="a9fb5d6d-73bc-4b96-84ce-9d4b297bde59",
+        connector_id="a59ca240-5bcb-4a1e-9cc0-07f8326a4378",
+        original_text="FCR 42/2026 PERSONA EJEMPLO",
+        detected_at=datetime(2026, 7, 27, 18, tzinfo=UTC),
+    )
+
+    first = _new_case_identity(event)
+    second = _new_case_identity(event)
+
+    assert first == second
+    assert first[1] == "FCR 42/2026"

@@ -5,6 +5,7 @@ import { AppShell } from "@/components/app-shell";
 import { TodayDashboard } from "@/components/today-dashboard";
 import { auth, authConfigured } from "@/lib/auth/server";
 import { getTodayDashboard } from "@/lib/today-data";
+import { withActor } from "@/lib/db-scope";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +18,8 @@ export default async function TodayPage() {
     actorId = session.user.id;
   }
 
-  const data = await getTodayDashboard(actorId);
+  if (!authConfigured && process.env.MONITOR_LEGAL_DEMO !== "true") redirect("/auth/sign-in");
+  const data = await withActor(actorId, () => getTodayDashboard(actorId));
 
   return (
     <AppShell>

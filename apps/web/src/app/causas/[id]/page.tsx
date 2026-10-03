@@ -1,3 +1,4 @@
+import { CaseAccess } from "@/components/case-access";
 import { AppShell } from "@/components/app-shell";
 import { CaseDetail } from "@/components/case-detail";
 import { demoMode } from "@/lib/demo-mode";
@@ -11,6 +12,7 @@ export default async function CasePage({
   return (
     <AppShell>
       <CaseDetail id={id} demo={demoMode()} />
+      <CaseAccess id={id}/>
     </AppShell>
   );
 }

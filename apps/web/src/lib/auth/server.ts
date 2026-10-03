@@ -3,13 +3,14 @@ import "server-only";
 import { Pool } from "@neondatabase/serverless";
 import { betterAuth } from "better-auth";
 import { nextCookies } from "better-auth/next-js";
+import { twoFactor, username } from "better-auth/plugins";
 
 export const authConfigured = Boolean(
-  process.env.DATABASE_URL && process.env.BETTER_AUTH_SECRET,
+  process.env.DATABASE_AUTH_URL && process.env.BETTER_AUTH_SECRET,
 );
 
 const connectionString =
-  process.env.DATABASE_URL ??
+  process.env.DATABASE_AUTH_URL ??
   "postgresql://demo:demo@127.0.0.1:55432/demo?sslmode=disable";
 
 export const auth = betterAuth({
@@ -19,6 +20,7 @@ export const auth = betterAuth({
     process.env.BETTER_AUTH_SECRET ??
     "demo-only-better-auth-secret-not-for-production",
   database: new Pool({ connectionString }),
+  socialProviders: {},
   emailAndPassword: {
     enabled: true,
     minPasswordLength: 12,
@@ -29,5 +31,6 @@ export const auth = betterAuth({
     updateAge: 60 * 60,
   },
   trustedOrigins: [process.env.BETTER_AUTH_URL ?? "http://localhost:3000"],
-  plugins: [nextCookies()],
+  rateLimit: { enabled: true, storage: "database", window: 60, max: 60 },
+  plugins: [username(), twoFactor({ issuer: "Monitor Legal" }), nextCookies()],
 });

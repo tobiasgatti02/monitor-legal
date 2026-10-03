@@ -17,15 +17,23 @@ export async function signIn(
 
   const email = String(formData.get("email") ?? "").trim();
   const password = String(formData.get("password") ?? "");
-  if (!email || password.length < 12) {
-    return { error: "Ingresá un email válido y una contraseña de al menos 12 caracteres." };
+  if (!email || !password) {
+    return { error: "Ingresá tu usuario o email y tu contraseña." };
   }
 
   try {
-    await auth.api.signInEmail({
-      body: { email, password },
-      headers: await headers(),
-    });
+    const requestHeaders = await headers();
+    if (email.includes("@")) {
+      await auth.api.signInEmail({
+        body: { email, password },
+        headers: requestHeaders,
+      });
+    } else {
+      await auth.api.signInUsername({
+        body: { username: email, password },
+        headers: requestHeaders,
+      });
+    }
   } catch {
     return { error: "No pudimos iniciar sesión. Revisá tus datos e intentá nuevamente." };
   }

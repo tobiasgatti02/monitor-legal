@@ -5,6 +5,17 @@ const optionalUuid = z.uuid().optional().nullable();
 const optionalDate = z.iso.datetime({ offset: true }).optional().nullable();
 const money = z.coerce.number().finite().nonnegative();
 
+function updateSchema(schema: z.ZodObject): z.ZodObject {
+  const fields: Record<string, z.ZodType> = {};
+  for (const [name, field] of Object.entries(
+    schema.shape as Record<string, z.ZodType>,
+  )) {
+    const withoutDefault = field instanceof z.ZodDefault ? field.removeDefault() : field;
+    fields[name] = z.optional(withoutDefault);
+  }
+  return z.object(fields);
+}
+
 export const idSchema = z.uuid();
 export const prioritySchema = z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]);
 export const taskStatusSchema = z.enum([
@@ -125,8 +136,7 @@ export const deadlineCreateSchema = z.object({
   notes: optionalText,
 });
 
-export const calendarCreateSchema = z
-  .object({
+const calendarFieldsSchema = z.object({
     caseId: optionalUuid,
     clientId: optionalUuid,
     deadlineId: optionalUuid,
@@ -137,8 +147,9 @@ export const calendarCreateSchema = z
     allDay: z.boolean().default(false),
     responsibleUserId: z.string().optional().nullable(),
     location: optionalText,
-  })
-  .refine(
+  });
+
+export const calendarCreateSchema = calendarFieldsSchema.refine(
     (value) => !value.endsAt || new Date(value.endsAt) >= new Date(value.startsAt),
     { message: "La fecha de fin debe ser posterior al inicio.", path: ["endsAt"] },
   );
@@ -268,15 +279,15 @@ export const settingsUpdateSchema = z.object({
   quietHoursEnd: z.string().regex(/^\d{2}:\d{2}$/).optional().nullable(),
 });
 
-export const clientUpdateSchema = clientCreateSchema.partial();
-export const caseUpdateSchema = caseCreateSchema.partial();
-export const leadUpdateSchema = leadFieldsSchema.partial();
-export const taskUpdateSchema = taskCreateSchema.partial();
-export const deadlineUpdateSchema = deadlineCreateSchema.partial();
-export const calendarUpdateSchema = calendarCreateSchema.partial();
-export const communicationUpdateSchema = communicationCreateSchema
-  .omit({ direction: true, status: true, sentAt: true })
-  .partial();
-export const feeUpdateSchema = feeCreateSchema.partial();
-export const paymentUpdateSchema = paymentCreateSchema.partial();
-export const integrationUpdateSchema = integrationCreateSchema.partial();
+export const clientUpdateSchema = updateSchema(clientCreateSchema);
+export const caseUpdateSchema = updateSchema(caseCreateSchema);
+export const leadUpdateSchema = updateSchema(leadFieldsSchema);
+export const taskUpdateSchema = updateSchema(taskCreateSchema);
+export const deadlineUpdateSchema = updateSchema(deadlineCreateSchema);
+export const calendarUpdateSchema = updateSchema(calendarFieldsSchema);
+export const communicationUpdateSchema = updateSchema(
+  communicationCreateSchema.omit({ direction: true, status: true, sentAt: true }),
+);
+export const feeUpdateSchema = updateSchema(feeCreateSchema);
+export const paymentUpdateSchema = updateSchema(paymentCreateSchema);
+export const integrationUpdateSchema = updateSchema(integrationCreateSchema);

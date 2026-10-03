@@ -26,6 +26,7 @@ import {
   teamMemberSchema,
 } from "@/lib/api/schemas";
 import { db } from "@/lib/db";
+import { storedFile } from "@/lib/agent/storage";
 
 type CountRow = { total: string };
 
@@ -383,6 +384,8 @@ type DocumentRow = {
   name: string;
   mimeType: string | null;
   contentBase64?: string;
+  storageProvider?: string;
+  storageKey?: string;
 };
 
 export async function listDocuments(request: Request): Promise<Response> {
@@ -448,40 +451,12 @@ export async function createDocument(request: Request): Promise<Response> {
   }
   const id = randomUUID();
   const hash = createHash("sha256").update(content).digest("hex");
-  const rows = await db().query(
-    `with document as (
-       insert into public.documents (
-         id, tenant_id, client_id, case_id, task_id, name, category,
-         storage_provider, storage_key, mime_type, size_bytes, content_hash,
-         shared_with_client, created_by
-       ) values (
-         $1, $2, $3, $4, $5, $6, $7,
-         'NEON', $1::text, $8, $9, $10, $11, $12
-       )
-       returning id, name, category, mime_type as "mimeType",
-                 size_bytes as "sizeBytes", content_hash as "contentHash",
-                 shared_with_client as "sharedWithClient", created_at as "createdAt"
-     ), blob as (
-       insert into public.document_blobs (document_id, tenant_id, content)
-       values ($1, $2, decode($13, 'base64'))
-     )
-     select * from document`,
-    [
-      id,
-      context.tenantId,
-      input.clientId ?? null,
-      input.caseId ?? null,
-      input.taskId ?? null,
-      input.name,
-      input.category,
-      input.mimeType ?? "application/octet-stream",
-      content.length,
-      hash,
-      input.sharedWithClient,
-      context.actorId,
-      input.contentBase64,
-    ],
-  );
+  const result = await db().transaction([
+    { statement: `insert into documents(id,tenant_id,client_id,case_id,task_id,name,category,storage_provider,storage_key,mime_type,size_bytes,content_hash,shared_with_client,created_by)
+      values($1,$2,$3,$4,$5,$6,$7,'NEON',$1::text,$8,$9,$10,$11,$12) returning id,name`, parameters: [id,context.tenantId,input.clientId??null,input.caseId??null,input.taskId??null,input.name,input.category,input.mimeType??"application/octet-stream",content.length,hash,input.sharedWithClient,context.actorId]},
+    { statement: "insert into document_blobs(document_id,tenant_id,content) values($1,$2,decode($3,'base64'))", parameters:[id,context.tenantId,input.contentBase64] },
+  ]);
+  const rows = result[0]!;
   await audit(context, "DOCUMENT_UPLOADED", "document", id, {
     category: input.category,
     sizeBytes: content.length,
@@ -535,20 +510,22 @@ export async function downloadDocument(
   const id = await routeId(route);
   const rows = (await db().query(
     `select d.id, d.name, d.mime_type as "mimeType",
+            d.storage_provider as "storageProvider", d.storage_key as "storageKey",
             encode(b.content, 'base64') as "contentBase64"
        from public.documents d
-       join public.document_blobs b on b.document_id = d.id and b.tenant_id = d.tenant_id
+       left join public.document_blobs b on b.document_id = d.id and b.tenant_id = d.tenant_id
       where d.tenant_id = $1 and d.id = $2 and d.deleted_at is null
       limit 1`,
     [context.tenantId, id],
   )) as DocumentRow[];
   const document = rows[0];
-  if (!document?.contentBase64) {
+  if (!document || (!document.contentBase64 && document.storageProvider !== "R2")) {
     throw new ApiError(404, "NOT_FOUND", "El contenido del documento no existe.");
   }
   await audit(context, "DOCUMENT_DOWNLOADED", "document", id);
   const encodedName = encodeURIComponent(document.name);
-  return new Response(Buffer.from(document.contentBase64, "base64"), {
+  const content = document.storageProvider === "R2" ? await (await storedFile(document.storageKey!)).arrayBuffer() : Buffer.from(document.contentBase64!, "base64");
+  return new Response(content, {
     headers: {
       "Content-Type": document.mimeType ?? "application/octet-stream",
       "Content-Disposition": `attachment; filename*=UTF-8''${encodedName}`,
@@ -727,7 +704,14 @@ export async function enqueueIntegration(
           Authorization: `Bearer ${process.env.GITHUB_DISPATCH_TOKEN}`,
           "X-GitHub-Api-Version": "2022-11-28",
         },
-        body: JSON.stringify({ ref: "main", inputs: { account, operation } }),
+        body: JSON.stringify({
+          ref: "main",
+          inputs: {
+            account,
+            operation,
+            job_id: String((jobs[0] as { id: string }).id),
+          },
+        }),
       },
     );
     dispatched = dispatch.ok;
@@ -786,14 +770,14 @@ export async function listAlerts(request: Request): Promise<Response> {
   const context = await apiContext(request);
   const pagination = paginationFrom(request);
   const unreadOnly = new URL(request.url).searchParams.get("unread") === "true";
-  const unread = unreadOnly ? " and read_at is null" : "";
+  const unread = unreadOnly ? " and read_at is null and (snoozed_until is null or snoozed_until<=now())" : "";
   const count = (await db().query(
     `select count(*)::text as total from public.notifications
       where tenant_id = $1 and user_id = $2${unread}`,
     [context.tenantId, context.actorId],
   )) as CountRow[];
   const rows = (await db().query(
-    `select id, event_id as "eventId", channel, priority, title, body,
+    `select id, event_id as "eventId", channel, priority, title, body,kind,source_url as "sourceUrl",
             read_at as "readAt", snoozed_until as "snoozedUntil",
             sent_at as "sentAt", failed_at as "failedAt", created_at as "createdAt"
        from public.notifications
@@ -886,7 +870,7 @@ export async function createClientPortalAccess(request: Request): Promise<Respon
   requireRoles(context, ["OWNER", "ADMIN"]);
   const input = await jsonBody(request, clientPortalAccessSchema);
   await assertTenantEntity(context, "clients", input.clientId, true);
-  const authUsers = await db().query(`select 1 from public."user" where id = $1 limit 1`, [
+  const authUsers = await db().query(`select 1 from public.users where id = $1 limit 1`, [
     input.authUserId,
   ]);
   if (authUsers.length === 0) {
@@ -932,7 +916,7 @@ export async function addTeamMember(request: Request): Promise<Response> {
   requireRoles(context, ["OWNER", "ADMIN"]);
   const input = await jsonBody(request, teamMemberSchema);
   const users = (await db().query(
-    `select id, name, email from public."user" where lower(email) = lower($1) limit 1`,
+    `select id, full_name as name, email from public.users where lower(email) = lower($1) limit 1`,
     [input.email],
   )) as { id: string; name: string; email: string }[];
   const user = users[0];

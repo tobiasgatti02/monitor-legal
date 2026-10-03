@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
-import re
 from uuid import UUID, uuid5
 
 import psycopg
@@ -31,6 +31,12 @@ def _validated_uuid(value: str, variable_name: str) -> UUID:
         return UUID(value)
     except ValueError as exc:
         raise NeonPersistenceError(f"{variable_name} debe ser un UUID existente en Neon") from exc
+
+
+def _database_text(value: object) -> str:
+    if isinstance(value, bytes):
+        return value.decode("utf-8")
+    return str(value)
 
 
 def _event_parameters(
@@ -81,11 +87,13 @@ class NeonEventSink:
         tenant_id: str,
         connector_id: str,
         trigger: str = "SCHEDULE",
+        job_id: str | None = None,
     ) -> None:
         self._database_url = database_url
         self._tenant_id = _validated_uuid(tenant_id, "MONITOR_TENANT_ID")
         self._connector_id = _validated_uuid(connector_id, "PJN_CONNECTOR_ID")
         self._trigger = trigger
+        self._job_id = _validated_uuid(job_id, "MONITOR_JOB_ID") if job_id else None
 
     def persist(self, sync_result: PjnSyncResult) -> NeonPersistResult:
         now = datetime.now(UTC)
@@ -113,7 +121,7 @@ class NeonEventSink:
                     raise NeonPersistenceError(
                         "El tenant no tiene un usuario propietario válido para el worker"
                     )
-                system_actor = str(actor_row[0])
+                system_actor = _database_text(actor_row[0])
 
                 cursor.execute(
                     """
@@ -264,6 +272,27 @@ class NeonEventSink:
                     """,
                     (now, now, self._tenant_id, self._connector_id),
                 )
+                if self._job_id:
+                    cursor.execute(
+                        """
+                        update public.jobs
+                           set status = 'SUCCEEDED',
+                               started_at = coalesce(started_at, %s),
+                               completed_at = %s,
+                               locked_at = null,
+                               locked_by = null,
+                               error_code = null,
+                               attempt_count = attempt_count + 1
+                         where tenant_id = %s and connector_id = %s and id = %s
+                        """,
+                        (
+                            now,
+                            now,
+                            self._tenant_id,
+                            self._connector_id,
+                            self._job_id,
+                        ),
+                    )
 
                 cursor.execute(
                     """
@@ -293,3 +322,97 @@ class NeonEventSink:
             sync_run_id=str(sync_run_id),
             inserted_events=inserted_events,
         )
+
+    def record_failure(self, error_code: str, error_message: str) -> str:
+        now = datetime.now(UTC)
+        safe_code = error_code[:80]
+        safe_message = error_message[:2_000]
+        try:
+            with (
+                psycopg.connect(
+                    self._database_url,
+                    connect_timeout=10,
+                    application_name="monitor-legal-pjn",
+                ) as connection,
+                connection.cursor() as cursor,
+            ):
+                cursor.execute(
+                    """
+                    insert into public.sync_runs (
+                      tenant_id, connector_id, status, trigger,
+                      started_at, completed_at, error_code, error_message
+                    )
+                    values (%s, %s, 'FAILED', %s, %s, %s, %s, %s)
+                    returning id
+                    """,
+                    (
+                        self._tenant_id,
+                        self._connector_id,
+                        self._trigger,
+                        now,
+                        now,
+                        safe_code,
+                        safe_message,
+                    ),
+                )
+                row = cursor.fetchone()
+                if row is None:
+                    raise NeonPersistenceError("Neon no devolvió el identificador del fallo")
+                sync_run_id = str(row[0])
+                cursor.execute(
+                    """
+                    update public.connectors
+                       set status = 'DEGRADED',
+                           last_attempt_at = %s,
+                           last_error_code = %s,
+                           last_error_message = %s
+                     where tenant_id = %s and id = %s
+                    """,
+                    (
+                        now,
+                        safe_code,
+                        safe_message,
+                        self._tenant_id,
+                        self._connector_id,
+                    ),
+                )
+                cursor.execute(
+                    """
+                    insert into public.audit_logs (
+                      tenant_id, action, entity_type, entity_id, metadata
+                    )
+                    values (%s, 'PJN_SYNC_FAILED', 'sync_run', %s, %s)
+                    """,
+                    (
+                        self._tenant_id,
+                        sync_run_id,
+                        Jsonb({"error_code": safe_code}),
+                    ),
+                )
+                if self._job_id:
+                    cursor.execute(
+                        """
+                        update public.jobs
+                           set status = 'FAILED',
+                               started_at = coalesce(started_at, %s),
+                               completed_at = %s,
+                               locked_at = null,
+                               locked_by = null,
+                               error_code = %s,
+                               attempt_count = attempt_count + 1
+                         where tenant_id = %s and connector_id = %s and id = %s
+                        """,
+                        (
+                            now,
+                            now,
+                            safe_code,
+                            self._tenant_id,
+                            self._connector_id,
+                            self._job_id,
+                        ),
+                    )
+        except NeonPersistenceError:
+            raise
+        except (psycopg.Error, OSError) as exc:
+            raise NeonPersistenceError(f"No se pudo registrar el fallo en Neon: {exc}") from exc
+        return sync_run_id

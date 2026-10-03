@@ -29,6 +29,7 @@ import {
   Users,
   WifiOff,
 } from "lucide-react";
+import Link from "next/link";
 import { useMemo, useState } from "react";
 
 import { cn } from "@/lib/cn";
@@ -59,13 +60,16 @@ const typeIcons: Record<AttentionItem["type"], typeof Gavel> = {
 };
 
 const quickActions = [
-  { label: "Nueva tarea", icon: ListTodo, shortcut: "T" },
-  { label: "Nuevo cliente", icon: UserRound, shortcut: "" },
-  { label: "Nuevo lead", icon: UserRoundPlus, shortcut: "L" },
-  { label: "Nueva causa", icon: BriefcaseBusiness, shortcut: "C" },
-  { label: "Nueva nota", icon: FileWarning, shortcut: "" },
-  { label: "Registrar llamada", icon: Phone, shortcut: "" },
+  { label: "Nueva tarea", icon: ListTodo, shortcut: "T", href: "/tareas" },
+  { label: "Nuevo cliente", icon: UserRound, shortcut: "", href: "/clientes" },
+  { label: "Nuevo lead", icon: UserRoundPlus, shortcut: "L", href: "/leads" },
+  { label: "Nueva causa", icon: BriefcaseBusiness, shortcut: "C", href: "/causas" },
+  { label: "Nueva nota", icon: FileWarning, shortcut: "", href: "/causas" },
+  { label: "Registrar llamada", icon: Phone, shortcut: "", href: "/clientes" },
 ] as const;
+
+const uuidPattern =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function sourceClass(source: AttentionItem["source"]): string {
   return `source-badge source-${source.toLowerCase()}`;
@@ -81,6 +85,7 @@ export function TodayDashboard({ data }: { data: DashboardData }) {
   const [completedAgenda, setCompletedAgenda] = useState<Set<string>>(
     () => new Set(data.agenda.filter((item) => item.completed).map((item) => item.id)),
   );
+  const [feedback, setFeedback] = useState<string | null>(null);
 
   const attention = useMemo(
     () => orderAttention(data.attention.filter((item) => !reviewed.has(item.id))),
@@ -90,17 +95,72 @@ export function TodayDashboard({ data }: { data: DashboardData }) {
     (integration) => integration.status !== "HEALTHY",
   );
 
-  function markReviewed(id: string) {
-    setReviewed((current) => new Set(current).add(id));
+  async function markReviewed(item: AttentionItem) {
+    if (item.type === "EVENT" && uuidPattern.test(item.id)) {
+      const result = await fetch(`/api/events/${item.id}/review`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "REVIEWED" }),
+      });
+      if (!result.ok) {
+        const payload = (await result.json()) as { error?: { message?: string } };
+        setFeedback(payload.error?.message ?? "No se pudo revisar la novedad.");
+        return;
+      }
+    }
+    setReviewed((current) => new Set(current).add(item.id));
+    setFeedback("Novedad marcada como revisada.");
   }
 
-  function toggleAgenda(id: string) {
+  async function toggleAgenda(id: string, kind: DashboardData["agenda"][number]["kind"]) {
+    const completing = !completedAgenda.has(id);
+    if (kind === "TASK" && uuidPattern.test(id)) {
+      const result = await fetch(`/api/tasks/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: completing ? "DONE" : "OPEN" }),
+      });
+      if (!result.ok) {
+        setFeedback("No se pudo actualizar la tarea.");
+        return;
+      }
+    }
     setCompletedAgenda((current) => {
       const next = new Set(current);
       if (next.has(id)) next.delete(id);
       else next.add(id);
       return next;
     });
+  }
+
+  async function createTask(item: AttentionItem) {
+    if (!uuidPattern.test(item.id)) {
+      setFeedback("Tarea creada en el modo demo.");
+      return;
+    }
+    const result = await fetch("/api/tasks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: `Revisar: ${item.title}`,
+        description: item.reason,
+        sourceEventId: item.type === "EVENT" ? item.id : null,
+        priority: item.priority,
+      }),
+    });
+    setFeedback(result.ok ? "Tarea creada." : "No se pudo crear la tarea.");
+  }
+
+  async function syncNow() {
+    const connector = data.integrations.find(
+      (item) => item.name.startsWith("PJN") && uuidPattern.test(item.id),
+    );
+    if (!connector) {
+      setFeedback("Sincronización simulada en modo demo.");
+      return;
+    }
+    const result = await fetch(`/api/integrations/${connector.id}/sync`, { method: "POST" });
+    setFeedback(result.ok ? "Sincronización encolada." : "No se pudo iniciar la sincronización.");
   }
 
   return (
@@ -112,7 +172,7 @@ export function TodayDashboard({ data }: { data: DashboardData }) {
           <p className="heading-copy">Esto es lo que necesita tu atención hoy.</p>
         </div>
         <div className="heading-actions">
-          <button className="button button-secondary" type="button">
+          <button className="button button-secondary" type="button" onClick={syncNow}>
             <RefreshCw size={16} />
             Sincronizar ahora
           </button>
@@ -123,20 +183,26 @@ export function TodayDashboard({ data }: { data: DashboardData }) {
             </summary>
             <div className="quick-menu">
               {quickActions.map((action) => (
-                <button type="button" key={action.label}>
+                <Link href={action.href} key={action.label}>
                   <action.icon size={17} />
                   <span>{action.label}</span>
                   {action.shortcut ? <kbd>{action.shortcut}</kbd> : null}
-                </button>
+                </Link>
               ))}
             </div>
           </details>
         </div>
       </section>
 
+      {feedback ? (
+        <button className="dashboard-toast" type="button" onClick={() => setFeedback(null)}>
+          {feedback}
+        </button>
+      ) : null}
+
       <section className="sync-line" aria-label="Estado de sincronización">
-        <span className="live-dot" />
-        <strong>Monitoreo activo</strong>
+        <span className={data.integrations.some(i => i.status === "HEALTHY") ? "live-dot" : ""} />
+        <strong>{data.integrations.some(i => i.status === "HEALTHY") ? "Monitoreo activo" : "Monitoreo pendiente de conexión"}</strong>
         {data.integrations
           .filter((integration) => integration.name.startsWith("PJN"))
           .map((integration) => (
@@ -144,7 +210,7 @@ export function TodayDashboard({ data }: { data: DashboardData }) {
               {integration.name}: {integration.lastSync}
             </span>
           ))}
-        <button type="button">Ver salud</button>
+        <Link href="/integraciones">Ver conexiones</Link>
       </section>
 
       <section className="summary-grid" aria-label="Resumen crítico">
@@ -221,16 +287,27 @@ export function TodayDashboard({ data }: { data: DashboardData }) {
                         <button
                           className="button button-small button-primary"
                           type="button"
-                          onClick={() => markReviewed(item.id)}
+                          onClick={() => markReviewed(item)}
                         >
                           {item.primaryAction}
                         </button>
-                        <button className="button button-small button-ghost" type="button">
+                        <button
+                          className="button button-small button-ghost"
+                          type="button"
+                          onClick={() => createTask(item)}
+                        >
                           Crear tarea
                         </button>
-                        <button className="button button-small button-ghost" type="button">
-                          Abrir fuente
-                        </button>
+                        {item.sourceUrl ? (
+                          <a
+                            className="button button-small button-ghost"
+                            href={item.sourceUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            Abrir fuente
+                          </a>
+                        ) : null}
                         <button className="icon-button subtle" type="button" aria-label="Más acciones">
                           <MoreHorizontal size={17} />
                         </button>
@@ -262,7 +339,7 @@ export function TodayDashboard({ data }: { data: DashboardData }) {
                     className={cn("agenda-item", completed && "completed")}
                     type="button"
                     key={item.id}
-                    onClick={() => toggleAgenda(item.id)}
+                    onClick={() => toggleAgenda(item.id, item.kind)}
                   >
                     <span className="agenda-time">{item.time}</span>
                     <span className="agenda-line" />

@@ -14,6 +14,7 @@ export const attentionItemSchema = z.object({
   owner: z.string(),
   priority: prioritySchema,
   primaryAction: z.string(),
+  sourceUrl: z.url().optional().nullable(),
 });
 
 export const agendaItemSchema = z.object({

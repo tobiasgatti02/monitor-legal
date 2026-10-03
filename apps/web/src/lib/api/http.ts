@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { ZodError, type ZodType } from "zod";
 
 import { ApiError } from "@/lib/api/errors";
+import { withDbScope } from "@/lib/db-scope";
 
 export type RouteParams = {
   params: Promise<Record<string, string>>;
@@ -15,7 +16,19 @@ type ApiHandler = (
 export function api(handler: ApiHandler): ApiHandler {
   return async (request, route) => {
     try {
-      return await handler(request, route);
+      if (!["GET", "HEAD", "OPTIONS"].includes(request.method)) {
+        const origin = request.headers.get("origin");
+        const expected = process.env.BETTER_AUTH_URL ?? new URL(request.url).origin;
+        if (origin && origin !== new URL(expected).origin) {
+          throw new ApiError(403, "INVALID_ORIGIN", "El origen de la solicitud no está permitido.");
+        }
+        if (Number(request.headers.get("content-length") ?? 0) > 8 * 1024 * 1024) {
+          throw new ApiError(413, "PAYLOAD_TOO_LARGE", "El archivo supera el límite permitido.");
+        }
+      }
+      const result = await withDbScope(() => handler(request, route));
+      result.headers.set("Cache-Control", "private, no-store");
+      return result;
     } catch (error) {
       if (error instanceof ApiError) {
         return NextResponse.json(
@@ -43,7 +56,7 @@ export function api(handler: ApiHandler): ApiHandler {
         );
       }
 
-      console.error("API_UNHANDLED_ERROR", error);
+      console.error("API_UNHANDLED_ERROR", error instanceof Error ? error.name : "UnknownError");
       return NextResponse.json(
         {
           error: {

@@ -25,6 +25,7 @@ export const demoDashboard: TodayDashboard = {
       owner: "Agustín Gatti",
       priority: "CRITICAL",
       primaryAction: "Revisar",
+      sourceUrl: "https://scw.pjn.gov.ar/",
     },
     {
       id: "deadline-1",
@@ -37,6 +38,7 @@ export const demoDashboard: TodayDashboard = {
       owner: "Sin asignar",
       priority: "HIGH",
       primaryAction: "Confirmar fecha",
+      sourceUrl: "https://scw.pjn.gov.ar/",
     },
     {
       id: "sync-1",

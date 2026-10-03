@@ -10,9 +10,9 @@ Cada punto representa un cambio revisable y desplegable, no una reescritura masi
    - estado fuera de Git y permisos mínimos.
 4. `feat(db): add Neon tenant foundation and RLS`
    - migraciones PostgreSQL reproducibles, Neon Auth, roles, pertenencia y auditoría.
-5. `feat(web): add authenticated legal workspace shell`
+5. `feat(web): add authenticated legal workspace shell` — implementado
    - layout, navegación y estados de carga/error.
-6. `feat(domain): add clients leads cases and tasks`
+6. `feat(domain): add clients leads cases and tasks` — implementado
    - APIs paginadas y validación compartida.
 7. `feat(pjn): dual-write new cases as canonical events` — implementado
    - JSON temporal + PostgreSQL, sin retirar alertas actuales.

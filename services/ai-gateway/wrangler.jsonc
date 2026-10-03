@@ -1,0 +1,25 @@
+{
+  "name": "monitor-legal-ai",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-03",
+  "ai": {
+    "binding": "AI"
+  },
+  "r2_buckets": [
+    {
+      "binding": "DOCUMENTS",
+      "bucket_name": "monitor-legal-documents"
+    }
+  ],
+  "observability": {
+    "enabled": false
+  },
+  "triggers": {
+    "crons": [
+      "*/5 * * * *"
+    ]
+  },
+  "vars": {
+    "ALERT_CRON_URL": "https://monitor-legal.vercel.app/api/internal/reminders"
+  }
+}

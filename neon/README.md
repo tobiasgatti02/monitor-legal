@@ -26,15 +26,22 @@ psql "$DATABASE_URL_UNPOOLED" \
 psql "$DATABASE_URL_UNPOOLED" \
   -v ON_ERROR_STOP=1 \
   -f neon/migrations/202607270002_better_auth.sql
+
+psql "$DATABASE_URL_UNPOOLED" \
+  -v ON_ERROR_STOP=1 \
+  -f neon/migrations/202607270003_document_storage.sql
 ```
 
 Better Auth guarda identidad y sesiones en el mismo Neon Postgres, pero en tablas separadas
 del perfil de negocio. Las migraciones deben ejecutarse con la conexión directa.
+La tercera migración agrega almacenamiento `bytea` para documentos pequeños del MVP.
+La migración `202610030003_auth_username.sql` agrega los campos de Better Auth para
+ingresar con nombre de usuario o email. Aplicarla antes de desplegar ese cambio.
 
 ## Crear el primer usuario y estudio
 
 1. Desplegar la web con `DATABASE_URL`, `BETTER_AUTH_URL`, `BETTER_AUTH_SECRET` y
-   `MONITOR_LEGAL_ALLOW_SIGN_UP=true`.
+   `MONITOR_LEGAL_ALLOW_SIGN_UP=true`. No se configura OAuth.
 2. Registrar una única cuenta inicial contra `POST /api/auth/sign-up/email`. No se expone
    registro público en la interfaz.
 3. Crear el estudio y los dos conectores:

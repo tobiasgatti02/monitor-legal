@@ -1,3 +1,4 @@
+import { AgentMetrics } from "@/components/agent-metrics";
 import { AppShell } from "@/components/app-shell";
 import { ResourceWorkspace } from "@/components/resource-workspace";
 import { demoMode } from "@/lib/demo-mode";
@@ -5,6 +6,7 @@ import { demoMode } from "@/lib/demo-mode";
 export default function AuditPage() {
   return (
     <AppShell>
+      <AgentMetrics/>
       <ResourceWorkspace
         title="Auditoría y salud"
         description="Acciones sensibles, ejecuciones y errores operativos."

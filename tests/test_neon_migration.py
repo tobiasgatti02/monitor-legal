@@ -4,6 +4,9 @@ import re
 from pathlib import Path
 
 MIGRATION = Path(__file__).parents[1] / "neon" / "migrations" / "202607270001_foundation.sql"
+DOCUMENT_MIGRATION = (
+    Path(__file__).parents[1] / "neon" / "migrations" / "202607270003_document_storage.sql"
+)
 
 REQUIRED_TABLES = {
     "tenants",
@@ -80,3 +83,13 @@ def test_migration_has_rls_idempotency_and_encrypted_credentials() -> None:
     assert "encrypted_payload bytea not null" in sql
     assert "encrypted_state bytea not null" in sql
     assert "password" not in re.sub(r"--.*", "", sql)
+
+
+def test_document_blob_storage_is_tenant_scoped_and_protected_by_rls() -> None:
+    sql = DOCUMENT_MIGRATION.read_text(encoding="utf-8").lower()
+
+    assert "create table public.document_blobs" in sql
+    assert "tenant_id uuid not null" in sql
+    assert "content bytea not null" in sql
+    assert "enable row level security" in sql
+    assert "app.is_tenant_member(tenant_id)" in sql
