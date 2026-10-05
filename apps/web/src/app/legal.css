@@ -1276,3 +1276,13 @@ textarea:focus {
 }
 .access-members{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin:20px 0}.access-members label{display:flex;align-items:center;gap:10px}.access-members input{width:auto}
 .alerts-columns{display:grid;grid-template-columns:1.25fr 1fr;gap:24px}.alerts-heading{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:24px;border-bottom:1px solid var(--line)}.alerts-heading h2,.security-card h2{display:flex;align-items:center;gap:8px}.alerts-heading label{display:flex;align-items:center;gap:8px;font-size:12px}.alert-item{padding:24px;border-bottom:1px solid var(--line);border-left:3px solid #b9ceb0}.alert-item.priority-high,.alert-item.priority-critical{border-left-color:#ba644d}.alert-item h3{margin:10px 0;font-size:16px}.alert-item p{font-size:13px;line-height:1.65;color:var(--muted)}.alert-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}.reminder-form{display:grid;gap:15px}.reminder-form label,.form-pair label{display:grid;gap:8px;font-size:12px}.reminder-form input,.reminder-form textarea,.reminder-form select,.form-pair select{width:100%;padding:10px;border:1px solid #d9e0d5;border-radius:7px;background:#fff}.reminder-form textarea{min-height:70px}.form-pair{display:grid;grid-template-columns:1fr 1fr;gap:12px}.reminder-row{display:flex;justify-content:space-between;gap:12px;padding:14px 0;border-bottom:1px solid var(--line)}.reminder-row strong{font-size:13px}.reminder-row p{font-size:11px}.alert-badge{background:#9d483d;color:white;font-size:10px;border-radius:10px;padding:2px 5px}.topbar-actions .icon-button{position:relative}.security-card summary{display:flex;align-items:center;gap:8px;cursor:pointer}@media(max-width:1000px){.alerts-columns{grid-template-columns:1fr}}@media(max-width:600px){.alerts-heading{align-items:start;flex-direction:column}.alert-item{padding:18px}.alerts-page .page-heading{gap:16px}}
+
+.agent-daily-usage {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  padding: 12px 24px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+.agent-daily-usage small { flex-basis: 100%; font-size: 11px; opacity: .75; }

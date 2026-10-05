@@ -19,6 +19,7 @@ import {
   X,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
+import type { DailyAIUsage } from "@/lib/agent/daily-usage";
 import type { Citation } from "@/lib/agent/contracts";
 import { useAgentAudio } from "./use-agent-audio";
 
@@ -42,6 +43,7 @@ type State = {
   memories: { id: string; value: string }[];
   modelConfigured: boolean;
   stats: { queries: number; tokens: number };
+  usage?: DailyAIUsage;
 };
 const starters = [
   {
@@ -276,6 +278,19 @@ export function AgentWorkspace() {
             {data?.modelConfigured ? "IA conectada" : "Consultas del estudio"}
           </span>
         </header>
+        {data?.usage && (
+          <div className="agent-daily-usage" aria-live="polite" aria-atomic="true">
+            <strong>
+              Hoy: {data.usage.used.toLocaleString("es-AR", { maximumFractionDigits: 2 })} / {data.usage.limit.toLocaleString("es-AR")} neurons
+            </strong>
+            <span>
+              Quedan {data.usage.remaining.toLocaleString("es-AR", { maximumFractionDigits: 2 })} · Tus consultas: {data.usage.actorUsed.toLocaleString("es-AR", { maximumFractionDigits: 2 })}
+            </span>
+            <small>
+              Consumo contabilizado de esta app, incluidas reservas de llamadas sin consumo informado. Reinicia a las {new Date(data.usage.resetsAt).toLocaleTimeString("es-AR", { timeZone: "America/Argentina/Buenos_Aires", hour: "2-digit", minute: "2-digit", hourCycle: "h23" })}. Cupo compartido; otros usos de Cloudflare no figuran aquí.
+            </small>
+          </div>
+        )}
         <div className="agent-scope">
           <label>
             Causa

@@ -4,6 +4,7 @@ import { querySchema } from "@/lib/agent/contracts";
 import { askAgent } from "@/lib/agent/service";
 import { modelConfigured } from "@/lib/agent/gateway";
 import { db } from "@/lib/db";
+import { dailyAIUsage } from "@/lib/agent/daily-usage";
 
 export const maxDuration = 120;
 export const POST = api(async (request) =>
@@ -16,7 +17,7 @@ export const POST = api(async (request) =>
 );
 export const GET = api(async (request) => {
   const c = await apiContext(request);
-  const [threads, cases, approvals, memories, stats] = await Promise.all([
+  const [threads, cases, approvals, memories, stats, usage] = await Promise.all([
     db().query(
       'select id,title,case_id as "caseId",updated_at as "updatedAt" from agent_threads where tenant_id=$1 and user_id=$2 order by updated_at desc limit 50',
       [c.tenantId, c.actorId],
@@ -37,6 +38,7 @@ export const GET = api(async (request) => {
       "select count(*)::int as queries,coalesce(sum(input_tokens+output_tokens),0)::int as tokens from agent_runs where tenant_id=$1 and user_id=$2 and created_at>now()-interval '1 day'",
       [c.tenantId, c.actorId],
     ),
+    dailyAIUsage(c),
   ]);
   return response({
     threads,
@@ -44,6 +46,7 @@ export const GET = api(async (request) => {
     approvals,
     memories,
     stats: stats[0],
+    usage,
     modelConfigured: modelConfigured(),
     actor: c,
   });
