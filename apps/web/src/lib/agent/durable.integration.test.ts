@@ -153,6 +153,38 @@ const suite =
 suite(
   "Node ingestion with real isolated Postgres and synthetic provider/storage",
   () => {
+    it("reports today's shared allowance, retains usage and blocks over 10,000 under RLS", () => {
+      sqlRun(`begin;
+        insert into ai_buckets(scope,scope_key,day,neurons) values
+          ('app','app',(now() at time zone 'UTC')::date,9995),
+          ('tenant','${c.tenantId}',(now() at time zone 'UTC')::date,9992),
+          ('actor','${c.actorId}',(now() at time zone 'UTC')::date,9990)
+          on conflict(scope,scope_key,day) do update set neurons=excluded.neurons;
+        insert into ai_buckets(scope,scope_key,day,neurons) values
+          ('app','app',(now() at time zone 'UTC')::date-1,10000)
+          on conflict(scope,scope_key,day) do update set neurons=excluded.neurons;
+        set local role monitor_runtime;
+        select set_config('request.jwt.claim.sub','${c.actorId}',true);
+        do $$declare u jsonb; w uuid;begin
+          u:=app.daily_ai_usage('${c.tenantId}');
+          if (u->>'limit')::numeric<>10000 or (u->>'used')::numeric<>9995 or
+             (u->>'actorUsed')::numeric<>9990 or (u->>'remaining')::numeric<>5 then
+            raise exception 'BAD_DAILY_USAGE';end if;
+          if (u->>'resetsAt')::timestamptz<>(date_trunc('day',now() at time zone 'UTC') at time zone 'UTC')+interval '1 day' then
+            raise exception 'BAD_RESET';end if;
+          begin
+            perform app.daily_ai_usage('10000000-0000-4000-8000-000000000099');
+            raise exception 'FOREIGN_TENANT_ALLOWED';
+          exception when others then if sqlerrm<>'TENANT_NOT_ACCESSIBLE' then raise;end if;end;
+          insert into ai_work(tenant_id,user_id,profile) values('${c.tenantId}','${c.actorId}','study') returning id into w;
+          begin
+            perform app.reserve_ai_attempt(w,'quota-check','cloudflare','@cf/qwen/qwen3-30b-a3b-fp8','test','test','https://example.test',1000,128);
+            raise exception 'OVER_LIMIT_ALLOWED';
+          exception when others then if sqlerrm<>'DAILY_BUDGET_EXCEEDED' then raise;end if;end;
+          if (app.daily_ai_usage('${c.tenantId}')->>'used')::numeric<>9995 then raise exception 'REJECTED_ATTEMPT_CHANGED_USAGE';end if;
+        end$$;
+        rollback;`);
+    });
     beforeAll(() => {
       harness.database =
         "agent_node_" + crypto.randomUUID().replaceAll("-", "").slice(0, 10);
