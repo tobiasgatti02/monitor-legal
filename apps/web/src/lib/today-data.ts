@@ -1,5 +1,6 @@
 import "server-only";
 
+import { capabilities } from "@/lib/agent/flags";
 import { demoDashboard } from "@/lib/demo-data";
 import {
   orderAttention,
@@ -105,7 +106,9 @@ function numberValue(value: string): number {
   return Number.isFinite(result) ? result : 0;
 }
 
-export async function getTodayDashboard(actorId: string): Promise<TodayDashboard> {
+export async function getTodayDashboard(
+  actorId: string,
+): Promise<TodayDashboard> {
   const demoEnabled = demoMode();
   if (demoEnabled) {
     return todayDashboardSchema.parse({
@@ -113,7 +116,8 @@ export async function getTodayDashboard(actorId: string): Promise<TodayDashboard
       dateLabel: dateLabel(),
     });
   }
-  if (!isDatabaseConfigured()) throw new Error("La base del estudio no está configurada.");
+  if (!isDatabaseConfigured())
+    throw new Error("La base del estudio no está configurada.");
 
   const sql = db();
   const memberships = (await sql.query(
@@ -131,10 +135,16 @@ export async function getTodayDashboard(actorId: string): Promise<TodayDashboard
   }
 
   const tenantId = membership.tenant_id;
-  const [summaryRows, eventRows, taskRows, communicationRows, leadRows, connectorRows] =
-    (await Promise.all([
-      sql.query(
-        `select
+  const [
+    summaryRows,
+    eventRows,
+    taskRows,
+    communicationRows,
+    leadRows,
+    connectorRows,
+  ] = (await Promise.all([
+    sql.query(
+      `select
           (select count(*) from public.judicial_events
             where tenant_id = $1 and review_status = 'UNREVIEWED'
               and severity in ('CRITICAL', 'HIGH'))::text as urgent,
@@ -158,10 +168,10 @@ export async function getTodayDashboard(actorId: string): Promise<TodayDashboard
           (select count(*) from public.connectors
             where tenant_id = $1 and status in ('DEGRADED', 'DISCONNECTED'))::text
               as sync_failures`,
-        [tenantId, actorId],
-      ),
-      sql.query(
-        `select e.id, e.title, coalesce(c.title, c.docket_number) as context, e.source,
+      [tenantId, actorId],
+    ),
+    sql.query(
+      `select e.id, e.title, coalesce(c.title, c.docket_number) as context, e.source,
                 e.detected_at, e.original_text, e.source_url,
                 coalesce(u.full_name, 'Sin asignar') as owner, e.severity
            from public.judicial_events e
@@ -173,10 +183,10 @@ export async function getTodayDashboard(actorId: string): Promise<TodayDashboard
               when 'MEDIUM' then 2 else 1 end desc,
             e.detected_at desc
           limit 8`,
-        [tenantId],
-      ),
-      sql.query(
-        `select t.id, t.title, coalesce(c.title, cl.full_name) as context, t.due_at, t.status
+      [tenantId],
+    ),
+    sql.query(
+      `select t.id, t.title, coalesce(c.title, cl.full_name) as context, t.due_at, t.status
            from public.tasks t
            left join public.cases c on c.id = t.case_id
            left join public.clients cl on cl.id = t.client_id
@@ -185,10 +195,10 @@ export async function getTodayDashboard(actorId: string): Promise<TodayDashboard
             and t.due_at < date_trunc('day', now()) + interval '1 day'
           order by t.due_at
           limit 10`,
-        [tenantId],
-      ),
-      sql.query(
-        `select cl.id, cl.full_name as client, c.title as matter,
+      [tenantId],
+    ),
+    sql.query(
+      `select cl.id, cl.full_name as client, c.title as matter,
                 case when cl.next_contact_at <= now() then 'Contacto prometido pendiente'
                      else 'Novedad pendiente de comunicar' end as reason,
                 greatest(0, extract(day from now() - coalesce(cl.last_contact_at, cl.created_at)))::int
@@ -211,38 +221,83 @@ export async function getTodayDashboard(actorId: string): Promise<TodayDashboard
                  )
             ))
           order by days_waiting desc limit 5`,
-        [tenantId],
-      ),
-      sql.query(
-        `select id, full_name as name, consultation_reason as matter, status::text as stage,
+      [tenantId],
+    ),
+    sql.query(
+      `select id, full_name as name, consultation_reason as matter, status::text as stage,
                 next_action, coalesce(next_action_at < now(), false) as overdue
            from public.leads
           where tenant_id = $1 and deleted_at is null
             and status not in ('HIRED', 'NOT_HIRED', 'CONFLICT', 'OUT_OF_SCOPE')
           order by overdue desc, created_at
           limit 5`,
-        [tenantId],
-      ),
-      sql.query(
-        `select id, source::text || ' · ' || account_label as name, status,
+      [tenantId],
+    ),
+    sql.query(
+      `select id, source::text || ' · ' || account_label as name, status,
                 last_success_at as last_sync,
                 coalesce(last_error_message, 'Sin errores recientes') as detail
            from public.connectors
           where tenant_id = $1
           order by source, account_label`,
-        [tenantId],
-      ),
-    ])) as [
-      SummaryRow[],
-      EventRow[],
-      TaskRow[],
-      CommunicationRow[],
-      LeadRow[],
-      ConnectorRow[],
-    ];
+      [tenantId],
+    ),
+  ])) as [
+    SummaryRow[],
+    EventRow[],
+    TaskRow[],
+    CommunicationRow[],
+    LeadRow[],
+    ConnectorRow[],
+  ];
 
   const summary = summaryRows[0];
   if (!summary) throw new Error("No se pudo calcular el resumen diario");
+
+  const folderAttention: AttentionItem[] = [];
+  if (capabilities().liveFolder) {
+    const pending = await sql.query(
+      `select i.id,i.label,c.title,c.id as case_id,i.updated_at,i.due_at,coalesce(u.full_name,'Sin asignar') as owner,dep.label as dependency,dep.status as dependency_status from case_checklists i join cases c on c.id=i.case_id and c.tenant_id=i.tenant_id left join users u on u.id=i.responsible_user_id left join case_checklists dep on dep.id=i.depends_on and dep.tenant_id=i.tenant_id where i.tenant_id=$1 and c.deleted_at is null and i.status in('PENDING','REQUESTED') order by i.due_at nulls last,i.updated_at limit 12`,
+      [tenantId],
+    );
+    folderAttention.push(
+      ...pending.map((i) => ({
+        id: i.id,
+        type: "DOCUMENT" as const,
+        title: `Documentación: ${i.label}`,
+        context: i.title,
+        source: "ESTUDIO" as const,
+        relativeTime: relativeTime(i.updated_at),
+        reason: `Regla: pedido pendiente. Fecha de gestión: ${i.due_at ?? "sin fecha"}. Actualizado: ${i.updated_at}.${i.dependency ? ` Depende de ${i.dependency} (${i.dependency_status}).` : ""} No es un plazo procesal.`,
+        owner: i.owner,
+        priority:
+          i.due_at && Date.parse(i.due_at) < Date.now()
+            ? ("HIGH" as const)
+            : ("MEDIUM" as const),
+        primaryAction: "Abrir carpeta",
+        sourceUrl: `/causas/${i.case_id}`,
+      })),
+    );
+    const quiet = await sql.query(
+      `select id,title,updated_at,coalesce(next_action,'Definir próximo paso') as next_action from cases where tenant_id=$1 and deleted_at is null and status='ACTIVE' and updated_at<now()-interval '14 days' order by updated_at limit 5`,
+      [tenantId],
+    );
+    folderAttention.push(
+      ...quiet.map((i) => ({
+        id: i.id,
+        type: "CASE" as const,
+        title: `Ficha sin actualizar: ${i.title}`,
+        context: i.next_action,
+        source: "ESTUDIO" as const,
+        relativeTime: relativeTime(i.updated_at),
+        reason: `Regla: ficha de causa activa sin actualización durante 14 días. Fuente: registro de causa; última actualización ${i.updated_at}. Verificar actividad no registrada.`,
+        owner: "Responsable de la causa",
+        priority: "MEDIUM" as const,
+        primaryAction: "Abrir carpeta",
+        sourceUrl: `/causas/${i.id}`,
+      })),
+    );
+  }
 
   const dashboard: TodayDashboard = {
     actorName: membership.actor_name?.split(" ")[0] ?? "Abogado",
@@ -257,10 +312,11 @@ export async function getTodayDashboard(actorId: string): Promise<TodayDashboard
       untouchedLeads: numberValue(summary.untouched_leads),
       syncFailures: numberValue(summary.sync_failures),
     },
-    attention: orderAttention(
-      eventRows.map((event) => ({
+    attention: orderAttention([
+      ...folderAttention,
+      ...eventRows.map((event) => ({
         id: event.id,
-        type: "EVENT",
+        type: "EVENT" as const,
         title: event.title,
         context: event.context ?? "Expediente sin vincular",
         source: sourceLabel(event.source),
@@ -271,7 +327,7 @@ export async function getTodayDashboard(actorId: string): Promise<TodayDashboard
         primaryAction: "Revisar",
         sourceUrl: event.source_url,
       })),
-    ),
+    ]),
     agenda: taskRows.map((task) => ({
       id: task.id,
       time: new Intl.DateTimeFormat("es-AR", {
@@ -304,7 +360,9 @@ export async function getTodayDashboard(actorId: string): Promise<TodayDashboard
     })),
     integrations: connectorRows.map((connector) => ({
       id: connector.id,
-      name: connector.name.replace("MEV_SCBA", "MEV").replace("SCBA_NOTIFICACIONES", "SCBA"),
+      name: connector.name
+        .replace("MEV_SCBA", "MEV")
+        .replace("SCBA_NOTIFICACIONES", "SCBA"),
       status:
         connector.status === "CONNECTED"
           ? "HEALTHY"

@@ -4,7 +4,7 @@ import { api, jsonBody, response } from "@/lib/api/http";
 import { ApiError } from "@/lib/api/errors";
 import { db } from "@/lib/db";
 import { storedFile } from "@/lib/agent/storage";
-import { indexDocument } from "@/lib/agent/ingestion";
+import { queueStatement } from "@/lib/agent/jobs";
 export const maxDuration = 120;
 export const POST = api(async (request) => {
   const c = await apiContext(request);
@@ -65,20 +65,13 @@ export const POST = api(async (request) => {
         "update document_uploads set status='FINALIZED' where tenant_id=$1 and id=$2",
       parameters: [c.tenantId, input.id],
     },
+    queueStatement(c, input.id),
   ]);
   await audit(c, "DOCUMENT_UPLOADED", "document", input.id, {
     sizeBytes: meta.size,
     contentHash: meta.checksum,
     storage: "R2",
   });
-  let ingestion: unknown;
-  try {
-    ingestion = await indexDocument(c, input.id);
-  } catch (e) {
-    ingestion = {
-      status: "FAILED",
-      errorCode: e instanceof ApiError ? e.code : "PARSING_FAILED",
-    };
-  }
+  const ingestion = { status: "PENDING" };
   return response({ id: input.id, ingestion }, { status: 201 });
 });

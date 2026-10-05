@@ -10,7 +10,8 @@ function updateSchema(schema: z.ZodObject): z.ZodObject {
   for (const [name, field] of Object.entries(
     schema.shape as Record<string, z.ZodType>,
   )) {
-    const withoutDefault = field instanceof z.ZodDefault ? field.removeDefault() : field;
+    const withoutDefault =
+      field instanceof z.ZodDefault ? field.removeDefault() : field;
     fields[name] = z.optional(withoutDefault);
   }
   return z.object(fields);
@@ -35,14 +36,23 @@ export const clientCreateSchema = z.object({
   whatsapp: optionalText,
   address: optionalText,
   locality: optionalText,
-  preferredChannel: z.enum(["EMAIL", "WHATSAPP", "PHONE", "INTERNAL"]).optional().nullable(),
+  preferredChannel: z
+    .enum(["EMAIL", "WHATSAPP", "PHONE", "INTERNAL"])
+    .optional()
+    .nullable(),
   status: z
     .enum(["ACTIVE", "POTENTIAL", "PAUSED", "CLOSED", "DO_NOT_CONTACT"])
     .default("ACTIVE"),
   source: optionalText,
   responsibleUserId: z.string().optional().nullable(),
   communicationConsent: z.boolean().default(false),
-  updateFrequencyDays: z.number().int().positive().max(365).optional().nullable(),
+  updateFrequencyDays: z
+    .number()
+    .int()
+    .positive()
+    .max(365)
+    .optional()
+    .nullable(),
   nextContactAt: optionalDate,
   notes: optionalText,
 });
@@ -51,6 +61,11 @@ export const caseCreateSchema = z.object({
   clientId: optionalUuid,
   docketNumber: optionalText,
   title: z.string().trim().min(2).max(300),
+  specialty: z
+    .enum(["WORK_ACCIDENT", "HEALTH", "LABOR", "SUCCESSION"])
+    .optional()
+    .nullable(),
+  forum: optionalText,
   jurisdiction: optionalText,
   court: optionalText,
   venue: optionalText,
@@ -62,35 +77,36 @@ export const caseCreateSchema = z.object({
 });
 
 const leadFieldsSchema = z.object({
-    fullName: z.string().trim().min(2).max(200),
-    email: z.email().optional().nullable(),
-    whatsapp: optionalText,
-    consultationReason: z.string().trim().min(2).max(2000),
-    source: optionalText,
-    urgency: prioritySchema.default("MEDIUM"),
-    status: z
-      .enum([
-        "NEW",
-        "TO_CONTACT",
-        "CONTACTED",
-        "MEETING_SCHEDULED",
-        "EVALUATING",
-        "PROPOSAL_SENT",
-        "HIRED",
-        "NOT_HIRED",
-        "NO_RESPONSE",
-        "CONFLICT",
-        "OUT_OF_SCOPE",
-      ])
-      .default("NEW"),
-    responsibleUserId: z.string().optional().nullable(),
-    nextAction: optionalText,
-    nextActionAt: optionalDate,
-    counterparty: optionalText,
-    lostReason: optionalText,
-  });
+  fullName: z.string().trim().min(2).max(200),
+  email: z.email().optional().nullable(),
+  whatsapp: optionalText,
+  consultationReason: z.string().trim().min(2).max(2000),
+  source: optionalText,
+  urgency: prioritySchema.default("MEDIUM"),
+  status: z
+    .enum([
+      "NEW",
+      "TO_CONTACT",
+      "CONTACTED",
+      "MEETING_SCHEDULED",
+      "EVALUATING",
+      "PROPOSAL_SENT",
+      "HIRED",
+      "NOT_HIRED",
+      "NO_RESPONSE",
+      "CONFLICT",
+      "OUT_OF_SCOPE",
+    ])
+    .default("NEW"),
+  responsibleUserId: z.string().optional().nullable(),
+  nextAction: optionalText,
+  nextActionAt: optionalDate,
+  counterparty: optionalText,
+  lostReason: optionalText,
+});
 
-export const leadCreateSchema = leadFieldsSchema.superRefine((value, context) => {
+export const leadCreateSchema = leadFieldsSchema.superRefine(
+  (value, context) => {
     if (!value.email && !value.whatsapp) {
       context.addIssue({
         code: "custom",
@@ -99,7 +115,9 @@ export const leadCreateSchema = leadFieldsSchema.superRefine((value, context) =>
       });
     }
     if (
-      ["NOT_HIRED", "NO_RESPONSE", "CONFLICT", "OUT_OF_SCOPE"].includes(value.status) &&
+      ["NOT_HIRED", "NO_RESPONSE", "CONFLICT", "OUT_OF_SCOPE"].includes(
+        value.status,
+      ) &&
       !value.lostReason
     ) {
       context.addIssue({
@@ -108,7 +126,8 @@ export const leadCreateSchema = leadFieldsSchema.superRefine((value, context) =>
         path: ["lostReason"],
       });
     }
-});
+  },
+);
 
 export const taskCreateSchema = z.object({
   caseId: optionalUuid,
@@ -137,22 +156,33 @@ export const deadlineCreateSchema = z.object({
 });
 
 const calendarFieldsSchema = z.object({
-    caseId: optionalUuid,
-    clientId: optionalUuid,
-    deadlineId: optionalUuid,
-    eventType: z.enum(["HEARING", "DEADLINE", "MEETING", "CALL", "TASK", "FOLLOW_UP"]),
-    title: z.string().trim().min(2).max(300),
-    startsAt: z.iso.datetime({ offset: true }),
-    endsAt: optionalDate,
-    allDay: z.boolean().default(false),
-    responsibleUserId: z.string().optional().nullable(),
-    location: optionalText,
-  });
+  caseId: optionalUuid,
+  clientId: optionalUuid,
+  deadlineId: optionalUuid,
+  eventType: z.enum([
+    "HEARING",
+    "DEADLINE",
+    "MEETING",
+    "CALL",
+    "TASK",
+    "FOLLOW_UP",
+  ]),
+  title: z.string().trim().min(2).max(300),
+  startsAt: z.iso.datetime({ offset: true }),
+  endsAt: optionalDate,
+  allDay: z.boolean().default(false),
+  responsibleUserId: z.string().optional().nullable(),
+  location: optionalText,
+});
 
 export const calendarCreateSchema = calendarFieldsSchema.refine(
-    (value) => !value.endsAt || new Date(value.endsAt) >= new Date(value.startsAt),
-    { message: "La fecha de fin debe ser posterior al inicio.", path: ["endsAt"] },
-  );
+  (value) =>
+    !value.endsAt || new Date(value.endsAt) >= new Date(value.startsAt),
+  {
+    message: "La fecha de fin debe ser posterior al inicio.",
+    path: ["endsAt"],
+  },
+);
 
 export const communicationCreateSchema = z.object({
   clientId: optionalUuid,
@@ -162,7 +192,14 @@ export const communicationCreateSchema = z.object({
   channel: z.enum(["EMAIL", "WHATSAPP", "PHONE", "INTERNAL", "PORTAL"]),
   direction: z.enum(["INBOUND", "OUTBOUND", "INTERNAL"]).default("OUTBOUND"),
   status: z
-    .enum(["DRAFT", "PENDING_APPROVAL", "APPROVED", "SENT", "REPLIED", "FOLLOW_UP"])
+    .enum([
+      "DRAFT",
+      "PENDING_APPROVAL",
+      "APPROVED",
+      "SENT",
+      "REPLIED",
+      "FOLLOW_UP",
+    ])
     .default("DRAFT"),
   subject: optionalText,
   body: z.string().trim().min(1).max(20_000),
@@ -275,8 +312,16 @@ export const settingsUpdateSchema = z.object({
   eveningDigest: z.boolean().optional(),
   emailEnabled: z.boolean().optional(),
   dashboardEnabled: z.boolean().optional(),
-  quietHoursStart: z.string().regex(/^\d{2}:\d{2}$/).optional().nullable(),
-  quietHoursEnd: z.string().regex(/^\d{2}:\d{2}$/).optional().nullable(),
+  quietHoursStart: z
+    .string()
+    .regex(/^\d{2}:\d{2}$/)
+    .optional()
+    .nullable(),
+  quietHoursEnd: z
+    .string()
+    .regex(/^\d{2}:\d{2}$/)
+    .optional()
+    .nullable(),
 });
 
 export const clientUpdateSchema = updateSchema(clientCreateSchema);
@@ -286,7 +331,11 @@ export const taskUpdateSchema = updateSchema(taskCreateSchema);
 export const deadlineUpdateSchema = updateSchema(deadlineCreateSchema);
 export const calendarUpdateSchema = updateSchema(calendarFieldsSchema);
 export const communicationUpdateSchema = updateSchema(
-  communicationCreateSchema.omit({ direction: true, status: true, sentAt: true }),
+  communicationCreateSchema.omit({
+    direction: true,
+    status: true,
+    sentAt: true,
+  }),
 );
 export const feeUpdateSchema = updateSchema(feeCreateSchema);
 export const paymentUpdateSchema = updateSchema(paymentCreateSchema);

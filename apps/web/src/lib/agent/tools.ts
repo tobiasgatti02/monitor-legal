@@ -26,7 +26,7 @@ export function agentTools(
   const sources: Citation[] = [];
   let retrievalMode = "none";
   let clarification: string | undefined;
-  let proposal: {title:string;citation:string;action:string}|undefined;
+  let proposal: { title: string; citation: string; action: string } | undefined;
   const implementations = {
     requestClarification: {
       description:
@@ -58,6 +58,8 @@ export function agentTools(
               url: `/api/knowledge/${c.documentId}/source#page=${c.pageStart}`,
               documentId: c.documentId,
               chunkId: c.id,
+              sourceVersion: c.sourceVersion,
+              sourceChecksum: c.sourceChecksum,
               pageStart: c.pageStart,
               pageEnd: c.pageEnd,
             };
@@ -217,7 +219,7 @@ export function agentTools(
           excerpt: JSON.stringify(rows[0]),
           caseId: input.caseId,
         });
-        proposal={title:input.title,citation,action:input.action};
+        proposal = { title: input.title, citation, action: input.action };
         return {
           approval: rows[0],
           citation,
@@ -280,7 +282,9 @@ export function agentTools(
     get retrievalMode() {
       return retrievalMode;
     },
-    get proposal(){return proposal;},
+    get proposal() {
+      return proposal;
+    },
     get clarification() {
       return clarification;
     },

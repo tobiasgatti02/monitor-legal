@@ -5,7 +5,16 @@ export const prioritySchema = z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]);
 
 export const attentionItemSchema = z.object({
   id: z.string(),
-  type: z.enum(["EVENT", "DEADLINE", "TASK", "COMMUNICATION", "LEAD", "SYNC"]),
+  type: z.enum([
+    "EVENT",
+    "DEADLINE",
+    "TASK",
+    "COMMUNICATION",
+    "LEAD",
+    "SYNC",
+    "DOCUMENT",
+    "CASE",
+  ]),
   title: z.string(),
   context: z.string(),
   source: sourceSchema,
@@ -85,6 +94,8 @@ const priorityWeight: Record<Priority, number> = {
 };
 
 const typeWeight: Record<AttentionItem["type"], number> = {
+  DOCUMENT: 25,
+  CASE: 15,
   DEADLINE: 60,
   EVENT: 50,
   SYNC: 40,
@@ -98,5 +109,7 @@ export function attentionScore(item: AttentionItem): number {
 }
 
 export function orderAttention(items: AttentionItem[]): AttentionItem[] {
-  return [...items].sort((left, right) => attentionScore(right) - attentionScore(left));
+  return [...items].sort(
+    (left, right) => attentionScore(right) - attentionScore(left),
+  );
 }

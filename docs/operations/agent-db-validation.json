@@ -1,0 +1,146 @@
+{
+  "environment": "synthetic loopback PostgreSQL 16 + pgvector 0.8.1",
+  "providerCalls": 0,
+  "checks": [
+    {
+      "name": "All migrations applied on an empty synthetic database",
+      "passed": true
+    },
+    {
+      "name": "Runtime cannot bypass RLS",
+      "passed": true
+    },
+    {
+      "name": "Reservation persisted before provider call",
+      "passed": true
+    },
+    {
+      "name": "Concurrent same-case generation is rejected",
+      "passed": true
+    },
+    {
+      "name": "Missing usage retains nonzero reservation",
+      "passed": true
+    },
+    {
+      "name": "Settlement replay rejected",
+      "passed": true
+    },
+    {
+      "name": "Reported usage reconciles cached/reasoning tokens",
+      "passed": true
+    },
+    {
+      "name": "Retries consume call budget",
+      "passed": true
+    },
+    {
+      "name": "Auxiliary embeddings participate in ledger",
+      "passed": true
+    },
+    {
+      "name": "Other actor cannot use a work id",
+      "passed": true
+    },
+    {
+      "name": "Other tenant sees no attempts",
+      "passed": true
+    },
+    {
+      "name": "Whole extraction holds daily neurons before calls",
+      "passed": true
+    },
+    {
+      "name": "Reservation cannot cross provider UTC day",
+      "passed": true
+    },
+    {
+      "name": "Unused aggregate reservation releases once",
+      "passed": true
+    },
+    {
+      "name": "Runtime cannot modify application quotas",
+      "passed": true
+    },
+    {
+      "name": "Cross-tenant identity rejected",
+      "passed": true
+    },
+    {
+      "name": "Queue replay has no duplicate effect",
+      "passed": true
+    },
+    {
+      "name": "Two workers claim at most one lease",
+      "passed": true
+    },
+    {
+      "name": "Expired fence cannot publish",
+      "passed": true
+    },
+    {
+      "name": "Resumed claim increments fence and preserves checkpoint",
+      "passed": true
+    },
+    {
+      "name": "Stale worker cannot publish after replacement",
+      "passed": true
+    },
+    {
+      "name": "Checkpoint job access is cause-scoped",
+      "passed": true
+    },
+    {
+      "name": "Revocation prevents document reads",
+      "passed": true
+    },
+    {
+      "name": "Revocation prevents worker claim",
+      "passed": true
+    },
+    {
+      "name": "Original fact remains immutable",
+      "passed": true
+    },
+    {
+      "name": "Source changes invalidate confirmed facts without overwriting",
+      "passed": true
+    },
+    {
+      "name": "Stale source cancels registered obligation",
+      "passed": true
+    },
+    {
+      "name": "Source changes cancel and fence pending jobs",
+      "passed": true
+    },
+    {
+      "name": "Scheduler has no direct document access",
+      "passed": true
+    },
+    {
+      "name": "Accounting role is neither owner nor bypass role",
+      "passed": true
+    },
+    {
+      "name": "Folder alerts respect disabled kinds",
+      "passed": true
+    },
+    {
+      "name": "Folder alerts respect quiet hours",
+      "passed": true
+    },
+    {
+      "name": "Folder scheduler emits explainable dashboard alerts",
+      "passed": true
+    },
+    {
+      "name": "Folder scheduler replay does not duplicate alerts",
+      "passed": true
+    },
+    {
+      "name": "Alert source is cause-scoped",
+      "passed": true
+    }
+  ]
+}

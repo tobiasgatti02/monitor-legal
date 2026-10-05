@@ -54,12 +54,23 @@ beforeEach(() => {
   mocks.query.mockImplementation(async (sql: string) => {
     if (sql.includes("select role,content") || sql.includes("select value"))
       return [];
-    return [{ id: threadId, case_id: null }];
+    return [{ id: threadId, case_id: null, allowed: true }];
   });
   mocks.execute.mockResolvedValue([]);
 });
 
 describe("natural conversation and evidence policy", () => {
+  it("clarifies ambiguous operations within the parent call budget", async () => {
+    mocks.complete.mockResolvedValueOnce(result("GROUNDED"));
+    const answer = await askAgent(context, {
+      message: "¿Y con eso?",
+      threadId,
+      mode: "operations",
+    });
+    expect(mocks.complete).toHaveBeenCalledOnce();
+    expect(answer.content).toContain("Precisá");
+    expect(mocks.execute).not.toHaveBeenCalled();
+  });
   it.each(["hola", "¿Cómo se usa el agente?", "Gracias por la ayuda"])(
     "answers %s without requiring documents",
     async (message) => {
@@ -73,10 +84,11 @@ describe("natural conversation and evidence policy", () => {
         threadId,
         mode: "research",
       });
-      expect(answer.content).toContain("¡Hola!");
+      expect(answer.content.length).toBeGreaterThan(10);
+      expect(mocks.complete).not.toHaveBeenCalled();
       expect(answer.citations).toEqual([]);
       expect(mocks.execute).not.toHaveBeenCalled();
-      expect(answer.metadata.inputTokens).toBe(20);
+      expect(answer.metadata.inputTokens).toBe(0);
       expect(mocks.query).toHaveBeenCalledWith(
         expect.stringContaining("set status=$3"),
         expect.arrayContaining(["COMPLETED"]),
@@ -85,9 +97,9 @@ describe("natural conversation and evidence policy", () => {
   );
 
   it("withholds unsupported legal assertions", async () => {
-    mocks.complete
-      .mockResolvedValueOnce(result("GROUNDED"))
-      .mockResolvedValueOnce(result("Tenés diez días para apelar."));
+    mocks.complete.mockResolvedValueOnce(
+      result("Tenés diez días para apelar."),
+    );
     const answer = await askAgent(context, {
       message: "¿Qué plazo legal tengo para apelar?",
       threadId,
@@ -113,11 +125,9 @@ describe("natural conversation and evidence policy", () => {
       url: "/tareas",
       excerpt: "Sin tareas pendientes",
     });
-    mocks.complete
-      .mockResolvedValueOnce(result("GROUNDED"))
-      .mockResolvedValueOnce(
-        result("No encontré tareas pendientes registradas. [R1]"),
-      );
+    mocks.complete.mockResolvedValueOnce(
+      result("No encontré tareas pendientes registradas. [R1]"),
+    );
     const answer = await askAgent(context, {
       message: "¿Qué tengo pendiente?",
       threadId,
@@ -135,7 +145,6 @@ describe("natural conversation and evidence policy", () => {
       excerpt: "Sin tareas pendientes",
     });
     mocks.complete
-      .mockResolvedValueOnce(result("GROUNDED"))
       .mockResolvedValueOnce(
         result("No encontré tareas pendientes registradas."),
       )
@@ -147,14 +156,13 @@ describe("natural conversation and evidence policy", () => {
       threadId,
       mode: "operations",
     });
-    expect(mocks.complete).toHaveBeenCalledTimes(3);
+    expect(mocks.complete).toHaveBeenCalledTimes(2);
     expect(answer.citations).toHaveLength(1);
     expect(answer.content).not.toContain("Subí documentos");
   });
 
   it("asks for missing information instead of demanding documents", async () => {
     mocks.complete
-      .mockResolvedValueOnce(result("GROUNDED"))
       .mockResolvedValueOnce({
         ...result(""),
         message: {

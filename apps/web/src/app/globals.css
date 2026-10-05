@@ -1823,3 +1823,15 @@ p {
     grid-template-columns: 1fr;
   }
 }
+
+.live-folder { padding: 24px; margin-top: 24px; }
+.folder-form { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin: 18px 0; }
+.folder-form label { display: grid; gap: 6px; flex: 1 1 180px; min-width: 0; }
+.live-folder input,.live-folder select,.live-folder textarea { width: 100%; min-width: 0; padding: 10px; border: 1px solid var(--border,#dbe1e9); border-radius: 8px; background: var(--surface,#fff); color: inherit; }
+.folder-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,280px),1fr)); gap: 14px; margin: 14px 0 24px; }
+.folder-grid article { border: 1px solid var(--border,#dbe1e9); border-radius: 10px; padding: 16px; overflow-wrap: anywhere; }
+.folder-grid blockquote { margin: 8px 0; padding-left: 12px; border-left: 3px solid #b4c1d4; }
+.folder-notice { padding: 14px; border-radius: 8px; background: #f4eee1; color: #665026; }
+.folder-output { margin-top: 20px; border-top: 1px solid var(--border,#dbe1e9); padding-top: 12px; }
+.folder-output pre { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; line-height: 1.6; max-height: 520px; overflow: auto; }
+@media (max-width: 600px) { .live-folder { padding: 16px; } .folder-form button { width: 100%; } }

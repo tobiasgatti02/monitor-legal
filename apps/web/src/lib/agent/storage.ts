@@ -50,3 +50,35 @@ export async function storedFile(key: string, metadata = false) {
     );
   return res;
 }
+
+// Derivatives have a separate, private contract. This never accepts original keys.
+export async function artifact(key: string, value?: unknown) {
+  if (!/^[0-9a-f-]{36}\/[0-9a-f-]{36}\/[a-f0-9]{64}$/.test(key))
+    throw new ApiError(
+      422,
+      "INVALID_ARTIFACT_KEY",
+      "Referencia de derivado inválida.",
+    );
+  if (!process.env.LEGAL_AI_URL || !process.env.LEGAL_AI_KEY)
+    throw new ApiError(
+      503,
+      "STORAGE_NOT_CONFIGURED",
+      "Falta almacenamiento privado para derivados.",
+    );
+  const res = await fetch(`${process.env.LEGAL_AI_URL}/artifacts/${key}`, {
+    method: value === undefined ? "GET" : "PUT",
+    headers: {
+      Authorization: `Bearer ${process.env.LEGAL_AI_KEY}`,
+      "Content-Type": "application/json",
+    },
+    signal: AbortSignal.timeout(15000),
+    ...(value === undefined ? {} : { body: JSON.stringify(value) }),
+  });
+  if (!res.ok)
+    throw new ApiError(
+      503,
+      "ARTIFACT_UNAVAILABLE",
+      "El derivado privado no está disponible.",
+    );
+  return value === undefined ? res.json() : undefined;
+}

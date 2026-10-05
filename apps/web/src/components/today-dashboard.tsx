@@ -40,17 +40,59 @@ import {
 } from "@/lib/dashboard";
 
 const summaryCards = [
-  { key: "urgent", label: "Urgencias sin revisar", icon: CircleAlert, tone: "danger" },
-  { key: "possibleDeadlines", label: "Posibles plazos", icon: FileWarning, tone: "warning" },
-  { key: "overdueTasks", label: "Tareas vencidas", icon: ListTodo, tone: "danger" },
-  { key: "upcoming", label: "Próximos 14 días", icon: CalendarClock, tone: "neutral" },
-  { key: "notifications", label: "Nuevas notificaciones", icon: BellRing, tone: "neutral" },
-  { key: "waitingClients", label: "Clientes esperando", icon: Users, tone: "warning" },
-  { key: "untouchedLeads", label: "Leads sin contactar", icon: UserRoundPlus, tone: "neutral" },
-  { key: "syncFailures", label: "Fallos de sincronización", icon: WifiOff, tone: "danger" },
+  {
+    key: "urgent",
+    label: "Urgencias sin revisar",
+    icon: CircleAlert,
+    tone: "danger",
+  },
+  {
+    key: "possibleDeadlines",
+    label: "Posibles plazos",
+    icon: FileWarning,
+    tone: "warning",
+  },
+  {
+    key: "overdueTasks",
+    label: "Tareas vencidas",
+    icon: ListTodo,
+    tone: "danger",
+  },
+  {
+    key: "upcoming",
+    label: "Próximos 14 días",
+    icon: CalendarClock,
+    tone: "neutral",
+  },
+  {
+    key: "notifications",
+    label: "Nuevas notificaciones",
+    icon: BellRing,
+    tone: "neutral",
+  },
+  {
+    key: "waitingClients",
+    label: "Clientes esperando",
+    icon: Users,
+    tone: "warning",
+  },
+  {
+    key: "untouchedLeads",
+    label: "Leads sin contactar",
+    icon: UserRoundPlus,
+    tone: "neutral",
+  },
+  {
+    key: "syncFailures",
+    label: "Fallos de sincronización",
+    icon: WifiOff,
+    tone: "danger",
+  },
 ] as const;
 
 const typeIcons: Record<AttentionItem["type"], typeof Gavel> = {
+  DOCUMENT: FileWarning,
+  CASE: BriefcaseBusiness,
   EVENT: Gavel,
   DEADLINE: CalendarClock,
   TASK: ListTodo,
@@ -63,7 +105,12 @@ const quickActions = [
   { label: "Nueva tarea", icon: ListTodo, shortcut: "T", href: "/tareas" },
   { label: "Nuevo cliente", icon: UserRound, shortcut: "", href: "/clientes" },
   { label: "Nuevo lead", icon: UserRoundPlus, shortcut: "L", href: "/leads" },
-  { label: "Nueva causa", icon: BriefcaseBusiness, shortcut: "C", href: "/causas" },
+  {
+    label: "Nueva causa",
+    icon: BriefcaseBusiness,
+    shortcut: "C",
+    href: "/causas",
+  },
   { label: "Nueva nota", icon: FileWarning, shortcut: "", href: "/causas" },
   { label: "Registrar llamada", icon: Phone, shortcut: "", href: "/clientes" },
 ] as const;
@@ -83,12 +130,16 @@ function whatsappHref(phone: string, client: string, matter: string): string {
 export function TodayDashboard({ data }: { data: DashboardData }) {
   const [reviewed, setReviewed] = useState<Set<string>>(() => new Set());
   const [completedAgenda, setCompletedAgenda] = useState<Set<string>>(
-    () => new Set(data.agenda.filter((item) => item.completed).map((item) => item.id)),
+    () =>
+      new Set(
+        data.agenda.filter((item) => item.completed).map((item) => item.id),
+      ),
   );
   const [feedback, setFeedback] = useState<string | null>(null);
 
   const attention = useMemo(
-    () => orderAttention(data.attention.filter((item) => !reviewed.has(item.id))),
+    () =>
+      orderAttention(data.attention.filter((item) => !reviewed.has(item.id))),
     [data.attention, reviewed],
   );
   const integrationProblems = data.integrations.filter(
@@ -96,6 +147,10 @@ export function TodayDashboard({ data }: { data: DashboardData }) {
   );
 
   async function markReviewed(item: AttentionItem) {
+    if ((item.type === "DOCUMENT" || item.type === "CASE") && item.sourceUrl) {
+      window.location.assign(item.sourceUrl);
+      return;
+    }
     if (item.type === "EVENT" && uuidPattern.test(item.id)) {
       const result = await fetch(`/api/events/${item.id}/review`, {
         method: "POST",
@@ -103,7 +158,9 @@ export function TodayDashboard({ data }: { data: DashboardData }) {
         body: JSON.stringify({ status: "REVIEWED" }),
       });
       if (!result.ok) {
-        const payload = (await result.json()) as { error?: { message?: string } };
+        const payload = (await result.json()) as {
+          error?: { message?: string };
+        };
         setFeedback(payload.error?.message ?? "No se pudo revisar la novedad.");
         return;
       }
@@ -112,7 +169,10 @@ export function TodayDashboard({ data }: { data: DashboardData }) {
     setFeedback("Novedad marcada como revisada.");
   }
 
-  async function toggleAgenda(id: string, kind: DashboardData["agenda"][number]["kind"]) {
+  async function toggleAgenda(
+    id: string,
+    kind: DashboardData["agenda"][number]["kind"],
+  ) {
     const completing = !completedAgenda.has(id);
     if (kind === "TASK" && uuidPattern.test(id)) {
       const result = await fetch(`/api/tasks/${id}`, {
@@ -159,8 +219,14 @@ export function TodayDashboard({ data }: { data: DashboardData }) {
       setFeedback("Sincronización simulada en modo demo.");
       return;
     }
-    const result = await fetch(`/api/integrations/${connector.id}/sync`, { method: "POST" });
-    setFeedback(result.ok ? "Sincronización encolada." : "No se pudo iniciar la sincronización.");
+    const result = await fetch(`/api/integrations/${connector.id}/sync`, {
+      method: "POST",
+    });
+    setFeedback(
+      result.ok
+        ? "Sincronización encolada."
+        : "No se pudo iniciar la sincronización.",
+    );
   }
 
   return (
@@ -169,10 +235,16 @@ export function TodayDashboard({ data }: { data: DashboardData }) {
         <div>
           <p className="eyebrow">{data.dateLabel}</p>
           <h1>Buenos días, {data.actorName}</h1>
-          <p className="heading-copy">Esto es lo que necesita tu atención hoy.</p>
+          <p className="heading-copy">
+            Esto es lo que necesita tu atención hoy.
+          </p>
         </div>
         <div className="heading-actions">
-          <button className="button button-secondary" type="button" onClick={syncNow}>
+          <button
+            className="button button-secondary"
+            type="button"
+            onClick={syncNow}
+          >
             <RefreshCw size={16} />
             Sincronizar ahora
           </button>
@@ -195,14 +267,28 @@ export function TodayDashboard({ data }: { data: DashboardData }) {
       </section>
 
       {feedback ? (
-        <button className="dashboard-toast" type="button" onClick={() => setFeedback(null)}>
+        <button
+          className="dashboard-toast"
+          type="button"
+          onClick={() => setFeedback(null)}
+        >
           {feedback}
         </button>
       ) : null}
 
       <section className="sync-line" aria-label="Estado de sincronización">
-        <span className={data.integrations.some(i => i.status === "HEALTHY") ? "live-dot" : ""} />
-        <strong>{data.integrations.some(i => i.status === "HEALTHY") ? "Monitoreo activo" : "Monitoreo pendiente de conexión"}</strong>
+        <span
+          className={
+            data.integrations.some((i) => i.status === "HEALTHY")
+              ? "live-dot"
+              : ""
+          }
+        />
+        <strong>
+          {data.integrations.some((i) => i.status === "HEALTHY")
+            ? "Monitoreo activo"
+            : "Monitoreo pendiente de conexión"}
+        </strong>
         {data.integrations
           .filter((integration) => integration.name.startsWith("PJN"))
           .map((integration) => (
@@ -218,7 +304,11 @@ export function TodayDashboard({ data }: { data: DashboardData }) {
           const value = data.summary[card.key];
           return (
             <button
-              className={cn("summary-card", `summary-${card.tone}`, value === 0 && "is-zero")}
+              className={cn(
+                "summary-card",
+                `summary-${card.tone}`,
+                value === 0 && "is-zero",
+              )}
               type="button"
               key={card.key}
             >
@@ -258,14 +348,22 @@ export function TodayDashboard({ data }: { data: DashboardData }) {
               attention.map((item) => {
                 const Icon = typeIcons[item.type];
                 return (
-                  <article className={cn("attention-item", `priority-${item.priority.toLowerCase()}`)} key={item.id}>
+                  <article
+                    className={cn(
+                      "attention-item",
+                      `priority-${item.priority.toLowerCase()}`,
+                    )}
+                    key={item.id}
+                  >
                     <span className="attention-icon">
                       <Icon size={18} />
                     </span>
                     <div className="attention-body">
                       <div className="attention-title-row">
                         <h3>{item.title}</h3>
-                        <span className={sourceClass(item.source)}>{item.source}</span>
+                        <span className={sourceClass(item.source)}>
+                          {item.source}
+                        </span>
                       </div>
                       <p className="attention-context">
                         {item.context} <span>· {item.relativeTime}</span>
@@ -308,7 +406,11 @@ export function TodayDashboard({ data }: { data: DashboardData }) {
                             Abrir fuente
                           </a>
                         ) : null}
-                        <button className="icon-button subtle" type="button" aria-label="Más acciones">
+                        <button
+                          className="icon-button subtle"
+                          type="button"
+                          aria-label="Más acciones"
+                        >
                           <MoreHorizontal size={17} />
                         </button>
                       </div>
@@ -327,7 +429,11 @@ export function TodayDashboard({ data }: { data: DashboardData }) {
                 <h2>Agenda de hoy</h2>
                 <p>{data.agenda.length} actividades</p>
               </div>
-              <button className="icon-button subtle" type="button" aria-label="Abrir calendario">
+              <button
+                className="icon-button subtle"
+                type="button"
+                aria-label="Abrir calendario"
+              >
                 <CalendarCheck size={18} />
               </button>
             </header>
@@ -347,7 +453,9 @@ export function TodayDashboard({ data }: { data: DashboardData }) {
                       <strong>{item.title}</strong>
                       <small>{item.context}</small>
                     </span>
-                    <span className="agenda-check">{completed ? <Check size={14} /> : null}</span>
+                    <span className="agenda-check">
+                      {completed ? <Check size={14} /> : null}
+                    </span>
                   </button>
                 );
               })}
@@ -368,7 +476,12 @@ export function TodayDashboard({ data }: { data: DashboardData }) {
               </header>
               {integrationProblems.map((integration) => (
                 <div className="health-item" key={integration.id}>
-                  <span className={cn("status-dot", `status-${integration.status.toLowerCase()}`)} />
+                  <span
+                    className={cn(
+                      "status-dot",
+                      `status-${integration.status.toLowerCase()}`,
+                    )}
+                  />
                   <div>
                     <strong>{integration.name}</strong>
                     <small>{integration.detail}</small>
@@ -395,7 +508,9 @@ export function TodayDashboard({ data }: { data: DashboardData }) {
           <div className="table-list">
             {data.communications.map((item) => (
               <article className="contact-row" key={item.id}>
-                <span className="avatar">{item.client.slice(0, 2).toUpperCase()}</span>
+                <span className="avatar">
+                  {item.client.slice(0, 2).toUpperCase()}
+                </span>
                 <div className="contact-copy">
                   <strong>{item.client}</strong>
                   <span>{item.matter}</span>
@@ -409,7 +524,11 @@ export function TodayDashboard({ data }: { data: DashboardData }) {
                   {item.whatsapp ? (
                     <a
                       className="icon-button whatsapp"
-                      href={whatsappHref(item.whatsapp, item.client, item.matter)}
+                      href={whatsappHref(
+                        item.whatsapp,
+                        item.client,
+                        item.matter,
+                      )}
                       target="_blank"
                       rel="noreferrer"
                       aria-label={`Abrir WhatsApp para ${item.client}`}
@@ -426,7 +545,10 @@ export function TodayDashboard({ data }: { data: DashboardData }) {
                       <Mail size={17} />
                     </a>
                   ) : null}
-                  <button className="button button-small button-secondary" type="button">
+                  <button
+                    className="button button-small button-secondary"
+                    type="button"
+                  >
                     Redactar
                   </button>
                 </div>
@@ -441,7 +563,11 @@ export function TodayDashboard({ data }: { data: DashboardData }) {
               <h2>Leads pendientes</h2>
               <p>Próximas acciones comerciales.</p>
             </div>
-            <button className="icon-button subtle" type="button" aria-label="Buscar leads">
+            <button
+              className="icon-button subtle"
+              type="button"
+              aria-label="Buscar leads"
+            >
               <Search size={17} />
             </button>
           </header>
@@ -459,12 +585,20 @@ export function TodayDashboard({ data }: { data: DashboardData }) {
                   <strong>{lead.name}</strong>
                   <span>{lead.matter}</span>
                   <small className={lead.overdue ? "overdue" : ""}>
-                    {lead.overdue ? <AlertTriangle size={12} /> : <Send size={12} />}
+                    {lead.overdue ? (
+                      <AlertTriangle size={12} />
+                    ) : (
+                      <Send size={12} />
+                    )}
                     {lead.nextAction}
                   </small>
                 </div>
                 <span className="stage-chip">{lead.stage}</span>
-                <button className="icon-button subtle" type="button" aria-label={`Abrir ${lead.name}`}>
+                <button
+                  className="icon-button subtle"
+                  type="button"
+                  aria-label={`Abrir ${lead.name}`}
+                >
                   <ChevronRight size={17} />
                 </button>
               </article>
@@ -474,8 +608,8 @@ export function TodayDashboard({ data }: { data: DashboardData }) {
       </div>
 
       <p className="legal-disclaimer">
-        Las fechas detectadas y clasificaciones automáticas requieren revisión profesional.
-        Monitor Legal no presenta escritos ni resuelve captchas.
+        Las fechas detectadas y clasificaciones automáticas requieren revisión
+        profesional. Monitor Legal no presenta escritos ni resuelve captchas.
       </p>
     </div>
   );

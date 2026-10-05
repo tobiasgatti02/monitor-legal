@@ -260,6 +260,7 @@ export function AlertsWorkspace() {
                   {labels[a.kind] ?? "Recordatorio"} ·{" "}
                   {new Date(a.createdAt).toLocaleString("es-AR", {
                     timeZone: "America/Argentina/Buenos_Aires",
+                    hour12:false,
                   })}
                 </span>
                 <h3>{a.title}</h3>
@@ -363,6 +364,7 @@ export function AlertsWorkspace() {
                     <p>
                       {new Date(r.dueAt).toLocaleString("es-AR", {
                         timeZone: "America/Argentina/Buenos_Aires",
+                    hour12:false,
                       })}{" "}
                       ·{" "}
                       {r.repeatFrequency === "DAILY"

@@ -1,0 +1,21 @@
+{
+  "agentChecks": 31,
+  "reminderChecks": 27,
+  "webUnitTests": 28,
+  "pythonTests": 23,
+  "additionalChecks": [
+    "private invitation single use",
+    "read-only member writes rejected",
+    "case access management",
+    "revocation hides alerts and reminders",
+    "first-owner bootstrap and username login",
+    "PDF page preservation",
+    "DOCX extraction",
+    "encrypted signed push request"
+  ],
+  "productionUrl": "https://monitor-legal.vercel.app",
+  "workerUrl": "https://monitor-legal-ai.tobiasgatti02.workers.dev",
+  "scheduledMinutes": 5,
+  "realDevicePushReception": "requires owner device opt-in; not automatically verified",
+  "realLegalDatasetEvaluation": "pending documents and lawyer review"
+}

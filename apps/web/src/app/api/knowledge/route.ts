@@ -3,7 +3,7 @@ import { api, response } from "@/lib/api/http";
 import { ApiError } from "@/lib/api/errors";
 import { db } from "@/lib/db";
 import { createHash, randomUUID } from "node:crypto";
-import { indexDocument } from "@/lib/agent/ingestion";
+import { queueStatement } from "@/lib/agent/jobs";
 import { z } from "zod";
 
 export const maxDuration = 120;
@@ -11,7 +11,9 @@ export const GET = api(async (request) => {
   const c = await apiContext(request);
   const rows = await db().query(
     `select d.id,d.name,d.case_id as "caseId",c.title as "caseTitle",d.mime_type as "mimeType",
-    d.size_bytes as "sizeBytes",d.created_at as "createdAt",coalesce(k.status,'PENDING') as status,
+    d.size_bytes as "sizeBytes",d.created_at as "createdAt",case when k.status='READY' and k.artifact_key is null then 'STALE' else coalesce(k.status,'PENDING') end as status,
+    k.covered_pages as "coveredPages",k.extraction_status as "extractionStatus",
+    (select jsonb_build_object('id',j.id,'status',j.status,'stage',j.checkpoint->>'stage','offset',j.checkpoint->>'offset','errorCode',j.error_code) from jobs j where j.document_id=d.id and j.job_type='LEGAL_INGEST' order by j.created_at desc limit 1) as job,
     k.page_count as "pageCount",k.chunk_count as "chunkCount",k.error_code as "errorCode",
     (select count(*) from knowledge_chunks ch where ch.document_id=d.id and ch.embedding is not null)::int as "embeddedChunks"
     from documents d left join knowledge_documents k on k.document_id=d.id and k.tenant_id=d.tenant_id
@@ -75,19 +77,12 @@ export const POST = api(async (request) => {
         "insert into document_versions(tenant_id,document_id,version,storage_key,content_hash,size_bytes,created_by) values($1,$2,1,$2::text,$3,$4,$5)",
       parameters: [c.tenantId, id, hash, file.size, c.actorId],
     },
+    queueStatement(c, id),
   ]);
   await audit(c, "DOCUMENT_UPLOADED", "document", id, {
     sizeBytes: file.size,
     contentHash: hash,
   });
-  let ingestion: unknown;
-  try {
-    ingestion = await indexDocument(c, id);
-  } catch (error) {
-    ingestion = {
-      status: "FAILED",
-      errorCode: error instanceof ApiError ? error.code : "PARSING_FAILED",
-    };
-  }
+  const ingestion = { status: "PENDING" };
   return response({ id, ingestion }, { status: 201 });
 });

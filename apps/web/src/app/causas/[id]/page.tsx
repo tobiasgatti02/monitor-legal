@@ -1,3 +1,7 @@
+import { CaseSupport } from "@/components/case-support";
+import { DraftWorkspace } from "@/components/draft-workspace";
+import { LiveFolder } from "@/components/live-folder";
+import { capabilities } from "@/lib/agent/flags";
 import { CaseAccess } from "@/components/case-access";
 import { AppShell } from "@/components/app-shell";
 import { CaseDetail } from "@/components/case-detail";
@@ -12,7 +16,17 @@ export default async function CasePage({
   return (
     <AppShell>
       <CaseDetail id={id} demo={demoMode()} />
-      <CaseAccess id={id}/>
+      <LiveFolder id={id} enabled={capabilities().liveFolder && !demoMode()} />
+      <DraftWorkspace
+        caseId={id}
+        enabled={capabilities().drafts && !demoMode()}
+      />
+      <CaseSupport
+        caseId={id}
+        enabled={capabilities().liveFolder && !demoMode()}
+        researchEnabled={capabilities().research}
+      />
+      <CaseAccess id={id} />
     </AppShell>
   );
 }

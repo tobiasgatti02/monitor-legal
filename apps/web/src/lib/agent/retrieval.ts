@@ -4,10 +4,11 @@ import type { ApiContext } from "@/lib/api/context";
 import { db } from "@/lib/db";
 import { rrf } from "./core";
 import type { Chunk } from "./contracts";
+import { budgetScope } from "./budgets";
 import { gateway } from "./gateway";
 
 const select = `k.id, k.document_id as "documentId", d.name as title, k.content,
-  k.page_start as "pageStart", k.page_end as "pageEnd"`;
+  k.source_version as "sourceVersion",d.content_hash as "sourceChecksum",k.page_start as "pageStart", k.page_end as "pageEnd"`;
 export async function retrieve(
   context: ApiContext,
   query: string,
@@ -15,7 +16,7 @@ export async function retrieve(
 ) {
   // Runtime role enforces document + matter RLS before either ranking sees text.
   const conditions =
-    "k.tenant_id=$1 and d.deleted_at is null and ($3::uuid is null or d.case_id=$3::uuid)";
+    "k.tenant_id=$1 and exists(select 1 from knowledge_documents kd where kd.document_id=d.id and kd.checksum=d.content_hash and kd.source_version=k.source_version and kd.artifact_key is not null and kd.status in('READY','PARTIAL')) and d.deleted_at is null and ($3::uuid is null or d.case_id=$3::uuid)";
   const lexical = (await db().query(
     `select ${select} from knowledge_chunks k join documents d on d.id=k.document_id and d.tenant_id=k.tenant_id
     where ${conditions} and (k.search @@ websearch_to_tsquery('spanish',$2) or k.content ilike '%'||$2||'%')
@@ -25,6 +26,7 @@ export async function retrieve(
   let semantic: Chunk[] = [];
   let mode = "lexical";
   try {
+    if (!budgetScope()) return { chunks: lexical.slice(0, 8), mode };
     const key = createHash("sha256")
       .update(
         `query-vector:bge-m3-v1:${context.tenantId}:${context.actorId}:${query}`,

@@ -15,5 +15,20 @@ export const GET = api(async (request) => {
   from agent_runs where tenant_id=$1 and created_at>now()-interval '7 days'`,
     [c.tenantId],
   );
-  return response(rows[0]);
+  const ledger = await db().query(
+    `select count(*)::int as attempts,count(*) filter(where usage_origin<>'reported')::int as estimated,
+    coalesce(sum(coalesce(neurons,neurons_reserved)),0)::text as neurons,
+    coalesce(sum(coalesce(usd,neurons_reserved*0.011/1000)),0)::text as usd,
+    count(*) filter(where status='UNCERTAIN' or status='RESERVED')::int as uncertain,
+    coalesce(sum(input_tokens),0)::bigint as "reportedInputTokens",coalesce(sum(output_tokens),0)::bigint as "reportedOutputTokens"
+    from ai_attempts where tenant_id=$1 and user_id=$2 and created_at>now()-interval '7 days'`,
+    [c.tenantId, c.actorId],
+  );
+  return response({
+    ...rows[0],
+    ...ledger[0],
+    costOrigin:
+      "Tarifa marginal estimada; no facturación. Usage ausente conserva reserva.",
+    tariffVersion: "cf-2026-10-04",
+  });
 });

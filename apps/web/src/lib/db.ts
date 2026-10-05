@@ -1,7 +1,7 @@
 import "server-only";
 
 import { neon, type NeonQueryFunction } from "@neondatabase/serverless";
-import { dbActor } from "@/lib/db-scope";
+import { dbActor, recordDb } from "@/lib/db-scope";
 
 let queryClient: NeonQueryFunction<false, false> | undefined;
 let roleChecked: Promise<void> | undefined;
@@ -31,23 +31,31 @@ export function db() {
       statements: { statement: string; parameters?: unknown[] }[],
     ) {
       await checkRole();
+      const started = performance.now();
       const results = await sql.transaction([
         sql.query("select set_config('request.jwt.claim.sub', $1, true)", [
           dbActor(),
         ]),
         ...statements.map((s) => sql.query(s.statement, s.parameters ?? [])),
       ]);
+      recordDb(
+        statements.length + 1,
+        performance.now() - started,
+        results.slice(1),
+      );
       return results.slice(1);
     },
     async query(statement: string, parameters: unknown[] = []) {
       await checkRole();
       const actorId = dbActor();
+      const started = performance.now();
       const results = await sql.transaction([
         sql.query("select set_config('request.jwt.claim.sub', $1, true)", [
           actorId,
         ]),
         sql.query(statement, parameters),
       ]);
+      recordDb(2, performance.now() - started, results[1]);
       return results[1]!;
     },
   };

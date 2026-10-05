@@ -12,7 +12,7 @@ export async function decideApproval(
   const rows = await db().query(
     `with selected as (
     select * from agent_approvals where tenant_id=$1 and user_id=$2 and id=$3
-      and status='PENDING' and expires_at>now() for update
+      and status='PENDING' and expires_at>now() and (payload->>'sourceOutputId' is null or exists(select 1 from case_outputs o where o.id=(payload->>'sourceOutputId')::uuid and o.tenant_id=agent_approvals.tenant_id and o.case_id=agent_approvals.case_id and o.reviewed_at is not null and not o.stale)) for update
   ), new_task as (
     insert into tasks(tenant_id,case_id,title,description,due_at,responsible_user_id,created_by)
     select $1,case_id,payload->>'title',payload->>'body',(payload->>'dueAt')::timestamptz,$2,$2

@@ -49,6 +49,8 @@ export type Citation = {
   excerpt: string;
   documentId?: string;
   chunkId?: string;
+  sourceVersion?: number;
+  sourceChecksum?: string;
   caseId?: string;
   clientId?: string;
   pageStart?: number;
@@ -61,6 +63,8 @@ export type Chunk = {
   content: string;
   pageStart: number;
   pageEnd: number;
+  sourceVersion?: number;
+  sourceChecksum?: string;
   score?: number;
 };
 export type ToolCall = {
@@ -76,6 +80,7 @@ export type ModelMessage = {
 };
 export type ModelResult = {
   message: ModelMessage;
+  usageOrigin?: "reported" | "estimated";
   inputTokens: number;
   outputTokens: number;
   model: string;

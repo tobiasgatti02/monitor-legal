@@ -1,8 +1,18 @@
 import type { ZodType } from "zod";
 
-import { apiContext, audit, requireWrite, type ApiContext } from "@/lib/api/context";
+import {
+  apiContext,
+  audit,
+  requireWrite,
+  type ApiContext,
+} from "@/lib/api/context";
 import { ApiError } from "@/lib/api/errors";
-import { jsonBody, paginated, response, type RouteParams } from "@/lib/api/http";
+import {
+  jsonBody,
+  paginated,
+  response,
+  type RouteParams,
+} from "@/lib/api/http";
 import { paginationFrom } from "@/lib/api/pagination";
 import {
   calendarCreateSchema,
@@ -60,7 +70,7 @@ const clientSelect = `
   created_at as "createdAt", updated_at as "updatedAt"`;
 
 const caseSelect = `
-  id, client_id as "clientId", docket_number as "docketNumber", title, jurisdiction,
+  id, client_id as "clientId", docket_number as "docketNumber", title, jurisdiction, specialty,forum,
   court, venue, status, priority, responsible_user_id as "responsibleUserId",
   next_action as "nextAction", next_action_at as "nextActionAt",
   last_movement_at as "lastMovementAt", created_at as "createdAt",
@@ -117,7 +127,10 @@ const integrationSelect = `
   last_error_message as "lastErrorMessage", created_at as "createdAt",
   updated_at as "updatedAt"`;
 
-const memberReference: Reference = { table: "tenant_members", column: "user_id" };
+const memberReference: Reference = {
+  table: "tenant_members",
+  column: "user_id",
+};
 
 export const resources = {
   clients: {
@@ -158,6 +171,8 @@ export const resources = {
       clientId: "client_id",
       docketNumber: "docket_number",
       title: "title",
+      specialty: "specialty",
+      forum: "forum",
       jurisdiction: "jurisdiction",
       court: "court",
       venue: "venue",
@@ -515,7 +530,11 @@ export async function listResource(
     dataParameters,
   )) as Record<string, unknown>[];
 
-  return paginated(rows, { page: pagination.page, limit: pagination.limit, total });
+  return paginated(rows, {
+    page: pagination.page,
+    limit: pagination.limit,
+    total,
+  });
 }
 
 export async function getResource(
@@ -554,7 +573,8 @@ export async function createResource(
     values,
   )) as { id: string }[];
   const id = rows[0]?.id;
-  if (!id) throw new ApiError(500, "CREATE_FAILED", "No se pudo crear el recurso.");
+  if (!id)
+    throw new ApiError(500, "CREATE_FAILED", "No se pudo crear el recurso.");
   await audit(context, `${config.name.toUpperCase()}_CREATED`, config.name, id);
   return response(await readOne(context, config, id), { status: 201 });
 }
@@ -581,11 +601,17 @@ export async function updateResource(
   if (
     resource === "leads" &&
     typeof input.status === "string" &&
-    ["NOT_HIRED", "NO_RESPONSE", "CONFLICT", "OUT_OF_SCOPE"].includes(input.status) &&
+    ["NOT_HIRED", "NO_RESPONSE", "CONFLICT", "OUT_OF_SCOPE"].includes(
+      input.status,
+    ) &&
     !input.lostReason &&
     !previous.lostReason
   ) {
-    throw new ApiError(422, "LOST_REASON_REQUIRED", "Indicá el motivo de cierre del lead.");
+    throw new ApiError(
+      422,
+      "LOST_REASON_REQUIRED",
+      "Indicá el motivo de cierre del lead.",
+    );
   }
   await ensureReferences(context, config, input);
   const mapped = mappedValues(config, input);
@@ -593,7 +619,9 @@ export async function updateResource(
     throw new ApiError(422, "EMPTY_UPDATE", "No hay campos para actualizar.");
   }
   const values = [...mapped.values, context.tenantId, id];
-  const set = mapped.columns.map((column, index) => `${column} = $${index + 1}`);
+  const set = mapped.columns.map(
+    (column, index) => `${column} = $${index + 1}`,
+  );
   await db().query(
     `update public.${config.table}
         set ${set.join(", ")}
@@ -610,7 +638,8 @@ export async function updateResource(
     );
   }
   if (resource === "deadlines") {
-    const dueAtChanged = typeof input.dueAt === "string" && input.dueAt !== previous.dueAt;
+    const dueAtChanged =
+      typeof input.dueAt === "string" && input.dueAt !== previous.dueAt;
     await db().query(
       `update public.deadlines
           set previous_due_at = case when $3 then $4::timestamptz else previous_due_at end,
@@ -618,12 +647,24 @@ export async function updateResource(
               confirmed_at = case when status = 'CONFIRMED'
                                   then coalesce(confirmed_at, now()) else confirmed_at end
         where tenant_id = $1 and id = $2`,
-      [context.tenantId, id, dueAtChanged, previous.dueAt ?? null, context.actorId],
+      [
+        context.tenantId,
+        id,
+        dueAtChanged,
+        previous.dueAt ?? null,
+        context.actorId,
+      ],
     );
   }
-  await audit(context, `${config.name.toUpperCase()}_UPDATED`, config.name, id, {
-    fields: Object.keys(input),
-  });
+  await audit(
+    context,
+    `${config.name.toUpperCase()}_UPDATED`,
+    config.name,
+    id,
+    {
+      fields: Object.keys(input),
+    },
+  );
   return response(await readOne(context, config, id));
 }
 

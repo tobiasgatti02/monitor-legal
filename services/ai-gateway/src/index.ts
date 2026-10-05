@@ -15,8 +15,10 @@ type Env = {
   };
   DOCUMENTS: Bucket;
   SERVICE_KEY: string;
-  ALERT_CRON_KEY:string;
-  ALERT_CRON_URL:string;
+  ALERT_CRON_KEY: string;
+  ALERT_CRON_URL: string;
+  INGESTION_CRON_URL?: string;
+  INGESTION_CRON_KEY?: string;
 };
 const allowed = new Set([
   "@cf/qwen/qwen3-30b-a3b-fp8",
@@ -93,11 +95,24 @@ async function readLimited(request: Request, limit: number) {
   return result.buffer;
 }
 export default {
- async scheduled(_event:unknown,env:Env){
-  if(!env.ALERT_CRON_URL||!env.ALERT_CRON_KEY)throw new Error("Scheduler not configured");
-  const result=await fetch(env.ALERT_CRON_URL,{method:"POST",headers:{Authorization:`Bearer ${env.ALERT_CRON_KEY}`},signal:AbortSignal.timeout(115000)});
-  if(!result.ok)throw new Error("Scheduled alerts failed");
- },
+  async scheduled(_event: unknown, env: Env) {
+    if (!env.ALERT_CRON_URL || !env.ALERT_CRON_KEY)
+      throw new Error("Scheduler not configured");
+    const result = await fetch(env.ALERT_CRON_URL, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${env.ALERT_CRON_KEY}` },
+      signal: AbortSignal.timeout(115000),
+    });
+    if (!result.ok) throw new Error("Scheduled alerts failed");
+    if (env.INGESTION_CRON_URL && env.INGESTION_CRON_KEY) {
+      const ingestion = await fetch(env.INGESTION_CRON_URL, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${env.INGESTION_CRON_KEY}` },
+        signal: AbortSignal.timeout(115000),
+      });
+      if (!ingestion.ok) throw new Error("Scheduled ingestion failed");
+    }
+  },
   async fetch(request: Request, env: Env) {
     const url = new URL(request.url),
       path = url.pathname,
@@ -160,6 +175,47 @@ export default {
       request.headers.get("Authorization") !== `Bearer ${env.SERVICE_KEY}`
     )
       return Response.json({ error: "Unauthorized" }, { status: 401, headers });
+    const derived = path.match(
+      new RegExp(`^/artifacts/(${uuid})/(${uuid})/([a-f0-9]{64})$`),
+    );
+    if (derived) {
+      const key = `derived/${derived[1]}/${derived[2]}/${derived[3]}`;
+      if (request.method === "PUT") {
+        try {
+          const content = await readLimited(request, 4 * 1024 * 1024);
+          const checksum = Array.from(
+            new Uint8Array(await crypto.subtle.digest("SHA-256", content)),
+          )
+            .map((b) => b.toString(16).padStart(2, "0"))
+            .join("");
+          if (checksum !== derived[3])
+            return Response.json(
+              { error: "Artifact checksum mismatch" },
+              { status: 422, headers },
+            );
+          await env.DOCUMENTS.put(key, content, {
+            onlyIf: { etagDoesNotMatch: "*" },
+            httpMetadata: { contentType: "application/json" },
+            customMetadata: { checksum },
+          });
+          return Response.json({ stored: true }, { headers });
+        } catch {
+          return Response.json(
+            { error: "Artifact rejected" },
+            { status: 422, headers },
+          );
+        }
+      }
+      if (request.method !== "GET")
+        return Response.json(
+          { error: "Method not allowed" },
+          { status: 405, headers },
+        );
+      const obj = await env.DOCUMENTS.get(key);
+      return obj
+        ? new Response(obj.body, { headers })
+        : Response.json({ error: "Not found" }, { status: 404, headers });
+    }
     const file = path.match(storagePath);
     if (file) {
       const key = `${file[1]}/${file[2]}`;
@@ -207,15 +263,33 @@ export default {
           { status: 422, headers },
         );
       if (path === "/chat/completions") {
-        input.max_tokens = Math.min(input.max_tokens ?? 800, 800);
+        const profiles: Record<string, number> = {
+          classification: 128,
+          brief: 600,
+          document: 600,
+          extraction: 600,
+          draft: 1200,
+          research: 600,
+        };
+        const profile = request.headers.get("X-Legal-Profile") ?? "";
+        if (
+          !profiles[profile] ||
+          !Number.isInteger(input.max_tokens) ||
+          input.max_tokens < 1 ||
+          input.max_tokens > profiles[profile]
+        )
+          return Response.json(
+            { error: "Invalid trusted profile" },
+            { status: 422, headers },
+          );
+        input.max_tokens = Math.min(input.max_tokens, profiles[profile]);
         input.stream = false;
         delete input.model;
         const result = await env.AI.run(model, input);
         if (result.choices) return Response.json(result, { headers });
         const calls = (
           result.tool_calls as
-            | { name: string; arguments: unknown }[]
-            | undefined
+            { name: string; arguments: unknown }[] | undefined
         )?.map((c) => ({
           id: crypto.randomUUID(),
           type: "function",

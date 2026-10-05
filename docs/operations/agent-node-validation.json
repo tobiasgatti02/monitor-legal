@@ -1,0 +1,12 @@
+{
+  "environment": "synthetic PostgreSQL16 + Node22; provider and R2 simulated",
+  "providerCallsReal": 0,
+  "providerCallsSimulated": 3,
+  "queries": 322,
+  "logicalResponseBytes": 238050,
+  "rss": 97402880,
+  "heap": 53612968,
+  "coverage": "complete for one synthetic source; no legal evaluation",
+  "communicationSends": 0,
+  "journey": "ingestion, replay, fact correction, checklist, procedure, template, draft/edit, event dedupe, research, client draft/approval, health obligation"
+}

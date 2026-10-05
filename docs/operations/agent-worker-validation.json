@@ -1,0 +1,78 @@
+{
+  "runtime": "local Miniflare/workerd",
+  "compatibilityDateTest": "2026-09-23",
+  "compatibilityDateTarget": "2026-10-03",
+  "caveat": "Installed runtime supports an older date; heap is sampled after requests, excludes peak/native/R2 isolates and remote AI. Not a guarantee of 128MB production isolate limit.",
+  "providerCallsReal": 0,
+  "remoteR2Calls": 0,
+  "requests": 22,
+  "artifactBytes": 4194218,
+  "samples": [
+    {
+      "usedSize": 752568,
+      "totalSize": 1572864,
+      "embedderHeapUsedSize": 386904,
+      "backingStorageSize": 226692
+    },
+    {
+      "usedSize": 1898652,
+      "totalSize": 4194304,
+      "embedderHeapUsedSize": 515864,
+      "backingStorageSize": 8623438
+    },
+    {
+      "usedSize": 3040940,
+      "totalSize": 5505024,
+      "embedderHeapUsedSize": 773784,
+      "backingStorageSize": 8623438
+    },
+    {
+      "usedSize": 3944532,
+      "totalSize": 6291456,
+      "embedderHeapUsedSize": 902744,
+      "backingStorageSize": 8623438
+    },
+    {
+      "usedSize": 5424372,
+      "totalSize": 7602176,
+      "embedderHeapUsedSize": 1160664,
+      "backingStorageSize": 17020184
+    },
+    {
+      "usedSize": 5774892,
+      "totalSize": 8650752,
+      "embedderHeapUsedSize": 1418584,
+      "backingStorageSize": 8623438
+    },
+    {
+      "usedSize": 6353052,
+      "totalSize": 10747904,
+      "embedderHeapUsedSize": 1547544,
+      "backingStorageSize": 8623438
+    },
+    {
+      "usedSize": 7832824,
+      "totalSize": 11272192,
+      "embedderHeapUsedSize": 1805464,
+      "backingStorageSize": 17020184
+    },
+    {
+      "usedSize": 8317668,
+      "totalSize": 12320768,
+      "embedderHeapUsedSize": 1934424,
+      "backingStorageSize": 8623438
+    },
+    {
+      "usedSize": 9787408,
+      "totalSize": 13107200,
+      "embedderHeapUsedSize": 2192344,
+      "backingStorageSize": 17020184
+    },
+    {
+      "usedSize": 10214268,
+      "totalSize": 14155776,
+      "embedderHeapUsedSize": 2450264,
+      "backingStorageSize": 8623438
+    }
+  ]
+}

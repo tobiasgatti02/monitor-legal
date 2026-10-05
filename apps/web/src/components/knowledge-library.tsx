@@ -22,6 +22,15 @@ type Doc = {
   chunkCount: number;
   embeddedChunks: number;
   errorCode?: string;
+  coveredPages?: number;
+  extractionStatus?: string;
+  job?: {
+    id: string;
+    status: string;
+    stage?: string;
+    offset?: number;
+    errorCode?: string;
+  };
 };
 const labels: Record<string, string> = {
   READY: "Disponible",
@@ -29,6 +38,8 @@ const labels: Record<string, string> = {
   PROCESSING: "Procesando",
   NEEDS_OCR: "Necesita OCR",
   FAILED: "Revisar archivo",
+  PARTIAL: "Cobertura parcial",
+  STALE: "Desactualizado",
 };
 export function KnowledgeLibrary() {
   const [docs, setDocs] = useState<Doc[]>([]),
@@ -40,6 +51,8 @@ export function KnowledgeLibrary() {
     [error, setError] = useState(""),
     [progress, setProgress] = useState("");
   const fileInput = useRef<HTMLInputElement>(null);
+  const cancelled = useRef(false),
+    polls = useRef(0);
   async function load() {
     const r = await fetch("/api/knowledge"),
       v = await r.json();
@@ -54,7 +67,60 @@ export function KnowledgeLibrary() {
       .then((r) => r.json())
       .then((v) => v.data && setCases(v.data));
   }, []);
+  const pending = docs.some(
+    (d) => d.job && ["QUEUED", "RUNNING"].includes(d.job.status),
+  );
+  useEffect(() => {
+    if (!pending || polls.current >= 20) return;
+    const timer = setTimeout(
+      () => {
+        polls.current++;
+        void load().catch((e) => setError(e.message));
+      },
+      Math.min(30000, 1500 * 2 ** Math.min(polls.current, 5)),
+    );
+    return () => clearTimeout(timer);
+  }, [pending, docs]);
+  async function jobAction(id: string, action: string) {
+    setBusy(id);
+    setError("");
+    try {
+      const r = await fetch(`/api/knowledge/jobs/${id}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action }),
+        }),
+        v = await r.json();
+      if (!r.ok) throw new Error(v.error?.message);
+      polls.current = 0;
+      await load();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy("");
+    }
+  }
+  async function executeStep() {
+    setBusy("step");
+    setError("");
+    try {
+      const r = await fetch("/api/knowledge/jobs", { method: "POST" }),
+        v = await r.json();
+      if (!r.ok) throw new Error(v.error?.message);
+      if (v.data.disabled)
+        throw new Error(
+          "El ejecutor durable está deshabilitado en el servidor.",
+        );
+      polls.current = 0;
+      await load();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy("");
+    }
+  }
   async function upload(file: File) {
+    polls.current = 0;
     setBusy("upload");
     setError("");
     try {
@@ -118,6 +184,7 @@ export function KnowledgeLibrary() {
   async function ocr(doc: Doc) {
     setBusy(doc.id);
     setError("");
+    cancelled.current = false;
     setProgress("Preparando reconocimiento local…");
     try {
       const r = await fetch(`/api/knowledge/${doc.id}/source`);
@@ -139,27 +206,41 @@ export function KnowledgeLibrary() {
           const pdfjs = await import("pdfjs-dist");
           pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
           const pdf = await pdfjs.getDocument({ data: buffer }).promise;
-          if (pdf.numPages > 30)
-            throw new Error(
-              "El OCR local admite hasta 30 páginas por archivo. Dividí el PDF.",
-            );
           try {
+            if (pdf.numPages > 30)
+              throw new Error(
+                "El OCR local admite hasta 30 páginas por archivo. Dividí el PDF.",
+              );
             for (let i = 1; i <= pdf.numPages; i++) {
+              if (cancelled.current)
+                throw new Error("OCR cancelado; original conservado.");
               setProgress(`Reconociendo página ${i} de ${pdf.numPages}…`);
               const page = await pdf.getPage(i),
-                viewport = page.getViewport({ scale: 1.6 }),
                 canvas = document.createElement("canvas");
-              canvas.width = viewport.width;
-              canvas.height = viewport.height;
-              await page.render({
-                canvas,
-                canvasContext: canvas.getContext("2d")!,
-                viewport,
-              }).promise;
-              const result = await worker.recognize(canvas);
-              pages.push({ page: i, text: result.data.text });
-              canvas.width = 0;
-              canvas.height = 0;
+              try {
+                const content = await page.getTextContent();
+                const text = content.items
+                  .map((item) => ("str" in item ? item.str : ""))
+                  .join(" ");
+                if (text.trim().length >= 20) {
+                  pages.push({ page: i, text });
+                  continue;
+                }
+                const viewport = page.getViewport({ scale: 1.6 });
+                canvas.width = viewport.width;
+                canvas.height = viewport.height;
+                await page.render({
+                  canvas,
+                  canvasContext: canvas.getContext("2d")!,
+                  viewport,
+                }).promise;
+                const result = await worker.recognize(canvas);
+                pages.push({ page: i, text: result.data.text });
+              } finally {
+                canvas.width = 0;
+                canvas.height = 0;
+                page.cleanup();
+              }
             }
           } finally {
             await pdf.loadingTask.destroy();
@@ -171,6 +252,8 @@ export function KnowledgeLibrary() {
       } finally {
         await worker.terminate();
       }
+      if (cancelled.current)
+        throw new Error("OCR cancelado; original conservado.");
       setProgress("Guardando texto reconocido…");
       await reindex(doc.id, pages);
     } catch (e) {
@@ -290,8 +373,28 @@ export function KnowledgeLibrary() {
         <p className="ocr-progress" role="status">
           <LoaderCircle size={16} className="spin" />
           {progress} · El reconocimiento se ejecuta en tu dispositivo.
+          <button
+            className="text-button"
+            onClick={() => {
+              cancelled.current = true;
+            }}
+          >
+            Cancelar después de la página actual
+          </button>
         </p>
       ) : null}
+      {pending && (
+        <p role="status">
+          Trabajo guardado en cola durable. Podés cerrar esta página.{" "}
+          <button
+            disabled={!!busy}
+            className="text-button"
+            onClick={() => void executeStep()}
+          >
+            Ejecutar un paso
+          </button>
+        </p>
+      )}
       <section className="panel knowledge-list">
         <div className="knowledge-toolbar">
           <div className="library-search">
@@ -332,6 +435,55 @@ export function KnowledgeLibrary() {
           <div className="document-grid">
             {visible.map((d) => (
               <article className="document-card" key={d.id}>
+                {d.job && (
+                  <div>
+                    <small>
+                      Trabajo: {d.job.status} · {d.job.stage ?? "en cola"} ·
+                      lote {d.job.offset ?? 0}
+                    </small>
+                    <p>
+                      Cobertura de texto: {d.coveredPages ?? 0}/
+                      {d.pageCount || "?"} · extracción:{" "}
+                      {d.extractionStatus ?? "PENDING"}
+                    </p>
+                    {d.job.errorCode && (
+                      <p role="status">
+                        {d.job.errorCode} · El avance se conserva.
+                      </p>
+                    )}
+                    {d.job.status === "FAILED" &&
+                      [
+                        "DOCUMENT_EXTRACTION_BUDGET",
+                        "EXTRACTION_CONTINUE_REQUIRED",
+                      ].includes(d.job.errorCode ?? "") && (
+                        <button
+                          disabled={!!busy}
+                          className="text-button"
+                          onClick={() => void jobAction(d.job!.id, "CONTINUE")}
+                        >
+                          Continuar hasta seis unidades
+                        </button>
+                      )}
+                    {["FAILED", "CANCELLED"].includes(d.job.status) && (
+                      <button
+                        disabled={!!busy}
+                        className="text-button"
+                        onClick={() => void jobAction(d.job!.id, "RETRY")}
+                      >
+                        Reintentar desde avance
+                      </button>
+                    )}
+                    {["QUEUED", "RUNNING"].includes(d.job.status) && (
+                      <button
+                        disabled={!!busy}
+                        className="text-button"
+                        onClick={() => void jobAction(d.job!.id, "CANCEL")}
+                      >
+                        Cancelar trabajo
+                      </button>
+                    )}
+                  </div>
+                )}
                 <div className="document-icon">
                   <FileText size={23} strokeWidth={1.3} />
                 </div>

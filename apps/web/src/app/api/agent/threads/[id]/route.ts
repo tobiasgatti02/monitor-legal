@@ -1,3 +1,5 @@
+import { verifyAgentCitations } from "@/lib/agent/citations";
+import type { Citation } from "@/lib/agent/contracts";
 import { apiContext } from "@/lib/api/context";
 import { api, response } from "@/lib/api/http";
 import { idSchema } from "@/lib/api/schemas";
@@ -13,9 +15,24 @@ export const GET = api(async (request, route) => {
   if (!threads.length)
     throw new ApiError(404, "NOT_FOUND", "Conversación no encontrada.");
   const messages = await db().query(
-    'select id,role,content,citations,metadata,created_at as "createdAt" from agent_messages where tenant_id=$1 and thread_id=$2 order by created_at limit 200',
+    'select id,role,content,citations,metadata,created_at as "createdAt" from agent_messages where tenant_id=$1 and thread_id=$2 order by created_at desc limit 40',
     [c.tenantId, id],
   );
+  messages.reverse();
+  try {
+    await verifyAgentCitations(
+      c,
+      messages.flatMap((m) => m.citations as Citation[]),
+    );
+  } catch {
+    for (const message of messages)
+      if (message.role === "assistant" && message.citations?.length) {
+        message.content =
+          "Respuesta desactualizada: sus fuentes cambiaron o dejaron de ser accesibles. Volvé a consultar.";
+        message.citations = [];
+        message.metadata = { ...message.metadata, stale: true };
+      }
+  }
   return response({ thread: threads[0], messages });
 });
 export const DELETE = api(async (request, route) => {

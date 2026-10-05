@@ -1,0 +1,123 @@
+{
+  "host": "v22.14.0 darwin/arm64",
+  "fixtures": "10 sequential small text fixtures; synthetic provider and R2; excludes admitted PDF maximum, browser and Worker",
+  "providerCallsReal": 0,
+  "providerCallsSimulated": 23,
+  "startRss": 97566720,
+  "peakRss": 108003328,
+  "rssDelta": 10436608,
+  "finalRss": 108003328,
+  "p50Ms": 1446,
+  "p95Ms": 1513,
+  "queries": 913,
+  "logicalResponseBytes": 300187,
+  "ledger": {
+    "attempts": 23,
+    "reported": 12,
+    "estimated": 11,
+    "estimatedtariffusd": "0.000523989125000000000000",
+    "estimatedtariffneurons": "47.63537500000000000000"
+  },
+  "samples": [
+    {
+      "job": 1,
+      "rss": 101105664,
+      "heapTotal": 77348864,
+      "heapUsed": 56816384,
+      "external": 4467834,
+      "arrayBuffers": 988879,
+      "heap": 56817784,
+      "durationMs": 1464
+    },
+    {
+      "job": 2,
+      "rss": 103284736,
+      "heapTotal": 78659584,
+      "heapUsed": 44911184,
+      "external": 4142957,
+      "arrayBuffers": 664516,
+      "heap": 44911624,
+      "durationMs": 1483
+    },
+    {
+      "job": 3,
+      "rss": 104300544,
+      "heapTotal": 78659584,
+      "heapUsed": 48113528,
+      "external": 4214529,
+      "arrayBuffers": 736088,
+      "heap": 48113968,
+      "durationMs": 1445
+    },
+    {
+      "job": 4,
+      "rss": 105840640,
+      "heapTotal": 78659584,
+      "heapUsed": 51199136,
+      "external": 4286098,
+      "arrayBuffers": 807657,
+      "heap": 51199576,
+      "durationMs": 1452
+    },
+    {
+      "job": 5,
+      "rss": 107151360,
+      "heapTotal": 78659584,
+      "heapUsed": 54276896,
+      "external": 4357665,
+      "arrayBuffers": 879224,
+      "heap": 54277336,
+      "durationMs": 1443
+    },
+    {
+      "job": 6,
+      "rss": 107266048,
+      "heapTotal": 78921728,
+      "heapUsed": 57347016,
+      "external": 4429237,
+      "arrayBuffers": 950796,
+      "heap": 57347456,
+      "durationMs": 1446
+    },
+    {
+      "job": 7,
+      "rss": 107806720,
+      "heapTotal": 79183872,
+      "heapUsed": 44350112,
+      "external": 4123202,
+      "arrayBuffers": 644761,
+      "heap": 44350552,
+      "durationMs": 1513
+    },
+    {
+      "job": 8,
+      "rss": 107905024,
+      "heapTotal": 79183872,
+      "heapUsed": 47442568,
+      "external": 4194773,
+      "arrayBuffers": 716332,
+      "heap": 47443008,
+      "durationMs": 1433
+    },
+    {
+      "job": 9,
+      "rss": 107986944,
+      "heapTotal": 79183872,
+      "heapUsed": 50526616,
+      "external": 4266344,
+      "arrayBuffers": 787903,
+      "heap": 50527056,
+      "durationMs": 1422
+    },
+    {
+      "job": 10,
+      "rss": 108003328,
+      "heapTotal": 79183872,
+      "heapUsed": 53565488,
+      "external": 4337916,
+      "arrayBuffers": 859475,
+      "heap": 53565928,
+      "durationMs": 1455
+    }
+  ]
+}
