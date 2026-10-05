@@ -30,7 +30,7 @@ Para ejecutar sólo las pruebas normales: `npm run test:web`. Para SQL y recorri
 
 ## Presupuestos y consumo
 
-`ai_profiles` y `ai_limits` se administran del lado servidor/migración. Límites iniciales diarios UTC: actor 500, estudio 2.500, aplicación 5.000 neurons; son techos locales experimentales, no la cuota de cuenta Cloudflare. Generación: uno por actor/causa, dos globales/estudio. Ingesta: un lease global. La clasificación consume el presupuesto padre. Embeddings/rerank, reintentos y reparación figuran por intento.
+`ai_profiles` y `ai_limits` se administran del lado servidor/migración. Desde la migración 202610040012, límites diarios UTC autorizados: actor 10.000, estudio 10.000, aplicación 10.000 neurons; son techos locales experimentales, no la cuota de cuenta Cloudflare. Generación: uno por actor/causa, dos globales/estudio. Ingesta: un lease global. La clasificación consume el presupuesto padre. Embeddings/rerank, reintentos y reparación figuran por intento.
 
 Se reserva antes de llamar; una extracción calcula su costo agregado y retiene saldo antes del primer lote. Si excede el perfil o cruza el día UTC, queda parcial; el usuario debe continuar expresamente por un máximo de seis unidades. Continuar libera el remanente anterior y crea otro segmento limitado. No resetear cuotas para que una prueba pase.
 
@@ -53,3 +53,5 @@ Para volver al comportamiento previo de indexación síncrona, usar el despliegu
 ## Entradas pendientes
 
 Modelos reales del abogado por especialidad/jurisdicción y aprobación de listas; reglas/índices de liquidaciones y resultados esperados; casos reservados para evaluación de calidad y tiempo de revisión; sesión legítima separada MEV y Presentaciones/Notificaciones; canal de comunicación/voz verificado y política de audio. El acceso público a JUBA identificado no equivale a búsqueda automatizada autenticada, texto completo ni vigencia jurídica validada.
+
+El chat muestra consumo diario agregado de la aplicación, consumo propio y saldo disponible mediante `app.daily_ai_usage`, con membresía validada y sin acceso directo al ledger ajeno. Se actualiza al cargar y después de cada mensaje, incluso fallido. El contador incluye reservas conservadoras sin usage; no es el total de otros servicios de la cuenta Cloudflare. El cupo es compartido, no 10.000 adicionales por usuario. Reinicia 00:00 UTC (21:00 Argentina). Se preservó el consumo al elevar los límites; no se contrató ni activó un plan pago.

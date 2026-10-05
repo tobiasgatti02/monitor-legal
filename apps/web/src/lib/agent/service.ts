@@ -67,17 +67,17 @@ async function runAgent(
   // Advisory lock serializes the rate check and reservation across all serverless instances.
   const reserved = await db().query(
     `with lock as (select pg_advisory_xact_lock(hashtext($1||$2))),
-    recent as (select count(*) filter(where created_at>now()-interval '1 minute') as minute,
-      count(*) filter(where created_at>now()-interval '1 day') as day from agent_runs,lock where tenant_id=$1::uuid and user_id=$2)
+    recent as (select count(*) as minute from agent_runs,lock
+      where tenant_id=$1::uuid and user_id=$2 and created_at>now()-interval '1 minute')
     insert into agent_runs(id,tenant_id,user_id,thread_id,status) select $3,$1::uuid,$2,$4,'RUNNING' from recent
-      where minute<5 and day<100 returning id`,
+      where minute<10 returning id`,
     [context.tenantId, context.actorId, runId, threadId],
   );
   if (!reserved.length)
     throw new ApiError(
       429,
-      "AGENT_LIMIT",
-      "Alcanzaste el límite de consultas. Intentá más tarde.",
+      "AGENT_RATE_LIMIT",
+      "Enviaste demasiados mensajes en un minuto. Esperá un minuto y volvé a intentar; tu cupo diario se mide en neurons.",
     );
   const tools = agentTools(context, threadId, caseId);
   const traces: { name: string; status: string; ms: number }[] = [];

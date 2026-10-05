@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
+import { parseMevEmail, type MevEmailPreview } from "@/lib/agent/mev-email";
 type Source = {
   id: string;
   title: string;
@@ -27,7 +28,10 @@ export function CaseSupport({
     [source, setSource] = useState("MEV_SCBA"),
     [text, setText] = useState(""),
     [url, setUrl] = useState(""),
-    [date, setDate] = useState("");
+    [date, setDate] = useState(""),
+    [parsedSourceDate, setParsedSourceDate] = useState(""),
+    [emailRaw, setEmailRaw] = useState(""),
+    [mevPreview, setMevPreview] = useState<MevEmailPreview | null>(null);
   const [sources, setSources] = useState<Source[]>([]),
     [query, setQuery] = useState(""),
     [authorityTitle, setAuthorityTitle] = useState(""),
@@ -86,6 +90,47 @@ export function CaseSupport({
           MEV y Presentaciones/Notificaciones son procedencias distintas. La
           importación no activa una conexión ni confirma el inicio de un plazo.
         </p>
+        <label>
+          Pegar aviso MEV reenviado (opcional)
+          <textarea
+            rows={6}
+            value={emailRaw}
+            onChange={(e) => setEmailRaw(e.target.value)}
+            placeholder="De: Mesa de Entradas Virtual <mev@scba.gov.ar>…"
+          />
+        </label>
+        <button
+          type="button"
+          className="secondary-button"
+          disabled={!emailRaw.trim() || busy}
+          onClick={() => {
+            const parsed = parseMevEmail(emailRaw);
+            if (!parsed) {
+              setError("No se pudo leer el aviso MEV. Revisá remitente, organismo, número de causa, fecha y descripción.");
+              return;
+            }
+            setError("");
+            setMevPreview(parsed);
+            setSource("MEV_SCBA");
+            setTitle(parsed.title);
+            setDate(parsed.localDate);
+            setParsedSourceDate(parsed.sourceDate);
+            setText(emailRaw);
+            setEmailRaw("");
+            setNotice("Campos extraídos del aviso. Verificá que la causa abierta y el texto coincidan antes de guardar.");
+          }}
+        >
+          Extraer campos del aviso MEV
+        </button>
+        {mevPreview && (
+          <p role="status">
+            Aviso aportado: causa {mevPreview.caseNumber} · {mevPreview.court}
+            {mevPreview.caseTitle ? ` · ${mevPreview.caseTitle}` : ""}.
+            El remitente es declarado en el texto y no fue autenticado; verificá
+            el original en MEV. La fecha indicada no confirma una notificación
+            formal ni inicia un plazo.
+          </p>
+        )}
         <form
           className="folder-form"
           onSubmit={(e) => {
@@ -95,7 +140,7 @@ export function CaseSupport({
               title,
               text,
               ...(url ? { sourceUrl: url } : {}),
-              ...(date ? { sourceDate: new Date(date).toISOString() } : {}),
+              ...(date ? { sourceDate: parsedSourceDate || new Date(date).toISOString() } : {}),
             }).then(
               (v) =>
                 v &&
@@ -109,7 +154,10 @@ export function CaseSupport({
         >
           <label>
             Procedencia
-            <select value={source} onChange={(e) => setSource(e.target.value)}>
+            <select value={source} onChange={(e) => {
+              setSource(e.target.value);
+              setMevPreview(null);
+            }}>
               <option value="MEV_SCBA">MEV SCBA</option>
               <option value="SCBA_NOTIFICACIONES">
                 Presentaciones y Notificaciones SCBA
@@ -138,7 +186,10 @@ export function CaseSupport({
             <input
               type="datetime-local"
               value={date}
-              onChange={(e) => setDate(e.target.value)}
+              onChange={(e) => {
+                setDate(e.target.value);
+                setParsedSourceDate("");
+              }}
             />
           </label>
           <label>

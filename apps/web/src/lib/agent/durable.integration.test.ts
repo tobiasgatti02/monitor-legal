@@ -138,6 +138,7 @@ import { decideApproval } from "./approvals";
 import { saveResearchSource } from "./research";
 import { loadFolder, folderMutation } from "./folder";
 import { agentTools } from "./tools";
+import { askAgent } from "./service";
 import { createAgentDocument, readAgentDocument } from "./study-documents";
 const root = resolve(process.cwd(), "../..");
 const c = {
@@ -184,6 +185,15 @@ suite(
           if (app.daily_ai_usage('${c.tenantId}')->>'used')::numeric<>9995 then raise exception 'REJECTED_ATTEMPT_CHANGED_USAGE';end if;
         end$$;
         rollback;`);
+    });
+    it("allows another chat after 100 earlier queries when the daily neuron allowance remains", async () => {
+      const legacy = crypto.randomUUID();
+      sqlRun(`insert into agent_threads(id,tenant_id,user_id,title) values('${legacy}','${c.tenantId}','${c.actorId}','Previous synthetic queries');
+        insert into agent_runs(tenant_id,user_id,thread_id,status,created_at)
+        select '${c.tenantId}','${c.actorId}','${legacy}','FAILED',now()-interval '2 hours' from generate_series(1,100);`);
+      const answer = await askAgent(c, { message: '/tareas', mode: 'operations' });
+      expect(answer.metadata.provider).toBe('deterministic');
+      expect(answer.content.length).toBeGreaterThan(0);
     });
     beforeAll(() => {
       harness.database =

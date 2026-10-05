@@ -2,6 +2,7 @@ begin;
 -- User-authorized free allocation. Preserve accumulated usage and concurrency.
 update ai_limits set neurons=10000 where scope in ('actor','tenant','app');
 -- Return scalar usage only; never grant clients access to other actors' ledger.
+grant create on schema app to monitor_accounting;
 create function app.daily_ai_usage(tid uuid) returns jsonb
 language plpgsql security definer set search_path=public,app as $$
 declare d date:=(now() at time zone 'UTC')::date; result jsonb;
@@ -26,4 +27,5 @@ end $$;
 alter function app.daily_ai_usage(uuid) owner to monitor_accounting;
 revoke all on function app.daily_ai_usage(uuid) from public;
 grant execute on function app.daily_ai_usage(uuid) to monitor_runtime;
+revoke create on schema app from monitor_accounting;
 commit;
