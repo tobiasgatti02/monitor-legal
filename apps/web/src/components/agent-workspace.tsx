@@ -9,14 +9,18 @@ import {
   FileText,
   LoaderCircle,
   MessageSquare,
+  Mic,
   Plus,
   ShieldCheck,
   Sparkles,
   Trash2,
+  Volume2,
+  Square,
   X,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import type { Citation } from "@/lib/agent/contracts";
+import { useAgentAudio } from "./use-agent-audio";
 
 type Message = {
   id: string;
@@ -85,6 +89,7 @@ export function AgentWorkspace() {
     [memory, setMemory] = useState("");
   const end = useRef<HTMLDivElement>(null),
     textarea = useRef<HTMLTextAreaElement>(null);
+  const audio = useAgentAudio(setText, (value) => void send(value));
   async function refresh() {
     try {
       setData(await apiCall("/api/agent"));
@@ -102,6 +107,8 @@ export function AgentWorkspace() {
   }, [messages, busy]);
   async function openThread(id: string) {
     if (busy) return;
+    audio.cancelListening();
+    audio.stopSpeaking();
     try {
       const v = await apiCall(`/api/agent/threads/${id}`);
       setThreadId(id);
@@ -115,6 +122,8 @@ export function AgentWorkspace() {
   }
   function reset() {
     if (busy) return;
+    audio.cancelListening();
+    audio.stopSpeaking();
     setThreadId(undefined);
     setMessages([]);
     setSource(undefined);
@@ -123,6 +132,8 @@ export function AgentWorkspace() {
   }
   async function send(value = text) {
     if (!value.trim() || busy) return;
+    audio.cancelListening();
+    audio.stopSpeaking();
     setBusy(true);
     setError("");
     setText("");
@@ -143,6 +154,7 @@ export function AgentWorkspace() {
       });
       setThreadId(answer.threadId);
       setMessages((m) => [...m, answer]);
+      if (audio.readReplies) audio.speak(answer.id, answer.content);
       await refresh();
     } catch (e) {
       const failure = e as Error & { details?: { threadId: string } };
@@ -355,6 +367,16 @@ export function AgentWorkspace() {
                       (_, id) => `[${id}](#source-${id})`,
                     )}
                   </ReactMarkdown>
+                  {m.role === "assistant" && audio.supported.output ? (
+                    <button
+                      className="audio-response"
+                      aria-label={audio.speakingId === m.id ? "Detener lectura de respuesta" : "Escuchar respuesta"}
+                      onClick={() => audio.speakingId === m.id ? audio.stopSpeaking() : audio.speak(m.id, m.content)}
+                    >
+                      {audio.speakingId === m.id ? <Square size={13} /> : <Volume2 size={14} />}
+                      {audio.speakingId === m.id ? "Detener audio" : "Escuchar"}
+                    </button>
+                  ) : null}
                   {m.citations?.length ? (
                     <div className="citation-list">
                       {m.citations.map((c) => (
@@ -434,11 +456,13 @@ export function AgentWorkspace() {
             {error}
           </div>
         ) : null}
+        {audio.audioError ? <div className="agent-error" role="alert">{audio.audioError}</div> : null}
         <form
           className="agent-composer"
           onSubmit={(e) => {
             e.preventDefault();
-            void send();
+            if (audio.listening) audio.finishListening(true);
+            else void send();
           }}
         >
           <textarea
@@ -449,7 +473,7 @@ export function AgentWorkspace() {
             placeholder="Contame qué necesitás o preguntá sobre tus causas…"
             rows={2}
             maxLength={4000}
-            disabled={busy}
+            disabled={busy || audio.listening}
             onKeyDown={(e) => {
               if (
                 e.key === "Enter" &&
@@ -461,6 +485,33 @@ export function AgentWorkspace() {
               }
             }}
           />
+          <div className="agent-audio-controls">
+            <button
+              type="button"
+              className={`audio-control ${audio.listening ? "active" : ""}`}
+              disabled={busy || !audio.supported.input}
+              aria-pressed={audio.listening}
+              onClick={() => audio.listening ? audio.finishListening() : audio.startListening(text)}
+            >
+              {audio.listening ? <Square size={14} /> : <Mic size={16} />}
+              {audio.listening ? "Terminar dictado" : "Hablar"}
+            </button>
+            {audio.supported.output ? <label>
+              <input type="checkbox" checked={audio.readReplies} onChange={(e) => {
+                audio.setReadReplies(e.target.checked);
+                if (!e.target.checked) audio.stopSpeaking();
+              }} />
+              Leer respuestas en voz alta
+            </label> : null}
+            {audio.speakingId ? <button type="button" className="audio-control" onClick={audio.stopSpeaking}><Square size={13} />Detener audio</button> : null}
+          </div>
+          <p className="audio-help" role="status">
+            {audio.listening
+              ? "Escuchando… Al terminar, presioná la flecha para enviar o Terminá el dictado para revisar el texto."
+              : audio.supported.input
+                ? "Podés dictar y enviar tu consulta. El navegador puede procesar el audio mediante su servicio de voz."
+                : "Dictado no disponible en este navegador. Podés seguir escribiendo tu consulta."}
+          </p>
           <div className="composer-bottom">
             <span>
               <ShieldCheck size={13} />
@@ -468,8 +519,8 @@ export function AgentWorkspace() {
             </span>
             <button
               type="submit"
-              disabled={busy || !text.trim()}
-              aria-label="Enviar consulta"
+              disabled={busy || (!text.trim() && !audio.listening)}
+              aria-label={audio.listening ? "Terminar y enviar consulta hablada" : "Enviar consulta"}
             >
               {busy ? (
                 <LoaderCircle size={17} className="spin" />

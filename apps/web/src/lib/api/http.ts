@@ -56,7 +56,17 @@ export function api(handler: ApiHandler): ApiHandler {
         );
       }
 
-      console.error("API_UNHANDLED_ERROR", error instanceof Error ? error.name : "UnknownError");
+      const databaseCode =
+        error && typeof error === "object" && "code" in error &&
+        typeof error.code === "string" && /^[A-Z0-9]{5}$/.test(error.code)
+          ? error.code
+          : undefined;
+      console.error("API_UNHANDLED_ERROR", {
+        name: error instanceof Error ? error.name : "UnknownError",
+        databaseCode,
+        method: request.method,
+        path: new URL(request.url).pathname,
+      });
       return NextResponse.json(
         {
           error: {
