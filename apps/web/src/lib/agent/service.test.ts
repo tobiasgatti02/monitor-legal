@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   audit: vi.fn(),
   sources: [] as Citation[],
   clarification: undefined as string | undefined,
+  proposal: undefined as { title: string; citation: string; action: string } | undefined,
 }));
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/db", () => ({ db: () => ({ query: mocks.query }) }));
@@ -25,6 +26,9 @@ vi.mock("./tools", () => ({
     execute: mocks.execute,
     get clarification() {
       return mocks.clarification;
+    },
+    get proposal() {
+      return mocks.proposal;
     },
   }),
 }));
@@ -51,6 +55,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   mocks.sources.length = 0;
   mocks.clarification = undefined;
+  mocks.proposal = undefined;
   mocks.query.mockImplementation(async (sql: string) => {
     if (sql.includes("select role,content") || sql.includes("select value"))
       return [];
@@ -60,6 +65,26 @@ beforeEach(() => {
 });
 
 describe("natural conversation and evidence policy", () => {
+  it("prepares the requested personal task without calling AI or asking for documents", async () => {
+    mocks.execute.mockImplementation(async (name: string, raw: string) => {
+      expect(name).toBe("proposeAction");
+      const task = JSON.parse(raw);
+      expect(task.action).toBe("CREATE_TASK");
+      expect(task.caseId).toBeUndefined();
+      mocks.proposal = { title: task.title, citation: "R1", action: task.action };
+      mocks.sources.push({ id: "R1", title: task.title, url: "/agente", excerpt: "PENDING" });
+    });
+    const answer = await askAgent(context, {
+      message: "podes crearme una tarea de llamar a luis mañana a las 19hs?",
+      threadId, mode: "research",
+    });
+    expect(answer.content).toContain("Llamar a luis");
+    expect(answer.content).toContain("pendiente de tu aprobación");
+    expect(answer.content).not.toContain("Subí documentos");
+    expect(mocks.complete).not.toHaveBeenCalled();
+    expect(mocks.query).not.toHaveBeenCalledWith(expect.stringContaining("insert into ai_work"), expect.anything());
+    expect(answer.citations).toHaveLength(1);
+  });
   it("clarifies ambiguous operations within the parent call budget", async () => {
     mocks.complete.mockResolvedValueOnce(result("GROUNDED"));
     const answer = await askAgent(context, {

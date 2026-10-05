@@ -20,6 +20,20 @@ beforeEach(() => {
 });
 
 describe("empty study lookups", () => {
+  it("stores a personal task proposal without a cause and does not execute the task", async () => {
+    mocks.query.mockResolvedValue([{ id: crypto.randomUUID(), status: "PENDING" }]);
+    const tools = agentTools(context, crypto.randomUUID());
+    await tools.execute("proposeAction", JSON.stringify({
+      action: "CREATE_TASK", title: "Llamar a Luis", dueAt: "2027-01-02T19:00:00-03:00",
+    }));
+    expect(mocks.query).toHaveBeenCalledOnce();
+    expect(mocks.query).toHaveBeenCalledWith(
+      expect.stringContaining("insert into agent_approvals"),
+      expect.arrayContaining([null, "CREATE_TASK"]),
+    );
+    expect(tools.proposal?.title).toBe("Llamar a Luis");
+    expect(tools.sources[0]?.caseId).toBeUndefined();
+  });
   it("provides evidence for an empty task list", async () => {
     const tools = agentTools(context, crypto.randomUUID());
     const rows = await tools.execute("getTasks", "{}");

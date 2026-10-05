@@ -107,6 +107,10 @@
       "passed": true
     },
     {
+      "name": "Newly uploaded case document invalidates existing drafts",
+      "passed": true
+    },
+    {
       "name": "Source changes invalidate confirmed facts without overwriting",
       "passed": true
     },

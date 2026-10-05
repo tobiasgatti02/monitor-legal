@@ -30,7 +30,7 @@ export const actionSchema = z
   .superRefine((v, ctx) => {
     if (["CREATE_DEADLINE", "CREATE_REMINDER"].includes(v.action) && !v.dueAt)
       ctx.addIssue({ code: "custom", message: "Falta fecha propuesta" });
-    if (v.action !== "CREATE_REMINDER" && !v.caseId)
+    if (["CREATE_DEADLINE", "DRAFT_COMMUNICATION"].includes(v.action) && !v.caseId)
       ctx.addIssue({ code: "custom", message: "Falta la causa" });
     if (
       v.action === "CREATE_REMINDER" &&

@@ -7,7 +7,29 @@ import { templateSchema, validateSection } from "./drafts";
 import { inflateRawSync } from "node:zlib";
 import { parseDocument } from "./ingestion";
 import type { FolderFact } from "./procedures";
+import { buildLetterDraft } from "./letter-draft";
 describe("shared writing, research and arithmetic", () => {
+  it("accounts for every case document and only writes confirmed documentary facts", () => {
+    const first = crypto.randomUUID(),
+      second = crypto.randomUUID();
+    const letter = buildLetterDraft(
+      "Causa de prueba",
+      [
+        { id: first, name: "denuncia.pdf", status: "READY", extraction_status: "COMPLETE" },
+        { id: second, name: "estudio.pdf", status: "PROCESSING", extraction_status: "PENDING" },
+      ],
+      [
+        { id: crypto.randomUUID(), label: "Fecha", original_value: "3 de octubre", normalized_value: null, status: "CONFIRMED", stale: false, document_id: first } as FolderFact,
+        { id: crypto.randomUUID(), label: "Diagnóstico", original_value: "dato sin revisar", normalized_value: null, status: "EXTRACTED", stale: false, document_id: second } as FolderFact,
+      ],
+    );
+    expect(letter.body).toContain("Fecha: 3 de octubre [fuente 1]");
+    expect(letter.body).not.toContain("dato sin revisar");
+    expect(letter.body).toContain("{{REQUERIMIENTO_CONCRETO_REVISADO_POR_EL_ABOGADO}}");
+    expect(letter.coverage.totalDocuments).toBe(2);
+    expect(letter.coverage.documentsWithConfirmedFacts).toBe(1);
+    expect(letter.coverage.pendingDocuments.map((doc) => doc.name)).toEqual(["estudio.pdf"]);
+  });
   it("exports valid editable DOCX with evidence and escapes XML", async () => {
     const doc = exportDocx(
       "Preparación de reclamo",

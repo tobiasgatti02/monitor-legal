@@ -180,7 +180,7 @@ export function agentTools(
     },
     proposeAction: {
       description:
-        "Proponer un recordatorio personal, tarea, plazo POSIBLE o comunicación en borrador. CREATE_REMINDER requiere fecha ISO con zona horaria, admite recurrencia diaria o semanal y causa opcional. Nunca ejecuta la acción: requiere aprobación humana.",
+        "Proponer un recordatorio personal, tarea, plazo POSIBLE o comunicación en borrador. CREATE_TASK admite causa opcional: una tarea personal no requiere documentos ni causa. CREATE_REMINDER requiere fecha ISO con zona horaria, admite recurrencia diaria o semanal y causa opcional. Nunca ejecuta la acción: requiere aprobación humana.",
       schema: actionSchema,
       execute: async (input: z.infer<typeof actionSchema>) => {
         requireWrite(context);

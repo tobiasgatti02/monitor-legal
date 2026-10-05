@@ -358,6 +358,16 @@ suite(
       expect(
         (await loadFolder(c, cause)).outputs.filter((o) => o.kind === "DRAFT"),
       ).toHaveLength(2);
+      const letter = await draftMutation(c, cause, {
+        action: "PREPARE_LETTER",
+      });
+      const letterOutput = (await loadFolder(c, cause)).outputs.find(
+        (o) => o.id === letter!.id,
+      );
+      expect(letterOutput?.body).toContain("CARTA DOCUMENTO");
+      expect(letterOutput?.body).toContain("Atención revisada");
+      expect(letterOutput?.metadata.coverage.totalDocuments).toBe(1);
+      expect(fetcher).toHaveBeenCalledOnce();
       const notice = {
         source: "MEV_SCBA" as const,
         title: "Movimiento sintético",
