@@ -50,3 +50,13 @@ Recorrido Node: 322 consultas, 238016 bytes lógicos de resultados, tres llamada
 ## Continuidad
 
 Próximo paso concreto: seguir `agent-deployment.md` en rama aislada verificada, repetir contratos reales y límites del host, aportar modelos/reglas/casos revisados y ejecutar `agent-evaluation.md`. No habilitar capacidades pendientes porque haya variables configuradas. Migraciones nuevas `202610040001`–`202610040009`; rollback por flags conserva originales, trabajos y auditoría. No se editó auth, stack, lockfile, secretos ni el cron de alertas de producción.
+
+## Ampliación operativa — 2026-10-05
+
+El agente ofrece 18 herramientas: reutiliza las APIs de registros con contexto autenticado y RLS para leer/crear/modificar clientes, causas, leads, tareas, calendario, comunicaciones en borrador, honorarios y registros de pagos; permite archivar explícitamente los módulos con borrado lógico. Incluye carpeta/historia de causa, lectura paginada de originales y creación de PDF/DOCX/TXT/Markdown privados. La creación de una tarea personal con fecha/hora explícita tiene recorrido determinista sin inferencia. No se envían comunicaciones ni se ejecutan transacciones financieras.
+
+Se publicaron aplicación, perfil `study`, gateway y flags de carpeta/borradores. La tarea solicitada «Llamar a luis» quedó persistida para 2026-10-05 19:00 America/Argentina/Buenos_Aires. La suite con PostgreSQL local real tuvo 141 aprobadas y una omitida; luego 80 comprobaciones enfocadas aprobaron, incluyendo seis del formato alternativo de llamadas a herramientas. Typecheck y lint aprobaron. PDF creado, leído nuevamente y renderizado para inspección visual.
+
+La afirmación histórica «llamadas reales: 0» de la sección anterior corresponde al cierre anterior, no a esta ampliación. Hubo inferencia real de diagnóstico, contabilizada por intento, con datos sintéticos. El gateway real devolvió describeModule y createStudyRecord; el registro sintético no se ejecutó en producción. Qwen a veces entrega un sobre completo `<tool_call>` en reasoning: se normalizan exclusivamente JSON completos para herramientas ofrecidas, luego se conservan validaciones y permisos habituales.
+
+El usuario pidió no pagar. No se activaron planes pagos ni se ampliaron límites diarios. El cupo experimental por actor no alcanza para nuevas reservas con el catálogo completo hoy; no se reinició ni borró consumo. La verificación real con el catálogo completo y una mutación natural queda pendiente de cupo disponible. Los PDFs sin texto requieren OCR; no se declara lectura universal ni autonomía ilimitada.
