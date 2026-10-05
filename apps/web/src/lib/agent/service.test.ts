@@ -68,6 +68,17 @@ beforeEach(() => {
 });
 
 describe("natural conversation and evidence policy", () => {
+  it.each(["podes crear pdf's?", "¿Podés crear PDFs?", "¿Podés generar un PDF?"])(
+    "answers the PDF capability question %s without requesting evidence",
+    async (message) => {
+      const answer = await askAgent(context, { message, mode: "research" });
+      expect(answer.content).toContain("Sí, puedo crear archivos PDF descargables");
+      expect(answer.content).not.toContain("Subí documentos");
+      expect(answer.citations).toEqual([]);
+      expect(mocks.complete).not.toHaveBeenCalled();
+      expect(mocks.execute).not.toHaveBeenCalled();
+    },
+  );
   it("recognizes the app library capability question without inference or document claims", async () => {
     const answer = await askAgent(context, { message: "podes leer de biblioteca cosas?", mode: "research" });
     expect(answer.content).toContain("biblioteca privada de esta app");

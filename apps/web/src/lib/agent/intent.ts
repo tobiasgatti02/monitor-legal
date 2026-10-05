@@ -34,6 +34,7 @@ export function deterministicRoute(message: string): {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/[¿?¡!.]/g, "")
+    .replace(/['’]/g, "")
     .trim();
   if (
     /^(hola|buen dia|buenas tardes|buenas noches|gracias|gracias por la ayuda)$/.test(
@@ -48,6 +49,11 @@ export function deterministicRoute(message: string): {
     return {
       greeting:
         "Podés consultar causas, tareas y plazos registrados; buscar documentos y proponer acciones para aprobación. Abrí una causa para trabajar con su carpeta.",
+    };
+  if (/^(podes|puedes) (crear|generar|hacer) (un |archivos? |documentos? )?pdfs?$/.test(text))
+    return {
+      greeting:
+        "Sí, puedo crear archivos PDF descargables como borradores para revisión. Decime el título y qué contenido querés incluir.",
     };
   if (/^(podes|puedes) leer (de (la )?biblioteca( cosas)?|(cosas|documentos|archivos) de (la )?biblioteca)$/.test(text))
     return {
