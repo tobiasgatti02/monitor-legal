@@ -68,6 +68,12 @@ beforeEach(() => {
 });
 
 describe("natural conversation and evidence policy", () => {
+  it("recognizes the app library capability question without inference or document claims", async () => {
+    const answer = await askAgent(context, { message: "podes leer de biblioteca cosas?", mode: "research" });
+    expect(answer.content).toContain("biblioteca privada de esta app");
+    expect(mocks.complete).not.toHaveBeenCalled();
+    expect(mocks.execute).not.toHaveBeenCalled();
+  });
   it("creates the requested personal task without calling AI or asking for documents", async () => {
     mocks.execute.mockImplementation(async (name: string, raw: string) => {
       expect(name).toBe("createStudyRecord");

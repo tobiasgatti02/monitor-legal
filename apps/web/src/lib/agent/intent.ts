@@ -49,6 +49,10 @@ export function deterministicRoute(message: string): {
       greeting:
         "Podés consultar causas, tareas y plazos registrados; buscar documentos y proponer acciones para aprobación. Abrí una causa para trabajar con su carpeta.",
     };
+  if (/^(podes|puedes) leer (de (la )?biblioteca( cosas)?|(cosas|documentos|archivos) de (la )?biblioteca)$/.test(text))
+    return {
+      greeting: "Sí. Puedo leer los documentos de la biblioteca privada de esta app, buscar por tema y resumirlos con referencias. Decime qué documento o tema querés consultar.",
+    };
   const tools: Record<string, string> = {
     "mostrame mis causas": "searchCases",
     "lista de causas": "searchCases",
@@ -59,7 +63,7 @@ export function deterministicRoute(message: string): {
   };
   if (tools[text]) return { tool: tools[text] };
   if (
-    /\b(causa|documento|plazo|legal|apelar|jurisprudencia|legislacion|redactar|escrito|pendiente|cliente|tarea)\b/.test(
+    /\b(biblioteca|causa|documento|plazo|legal|apelar|jurisprudencia|legislacion|redactar|escrito|pendiente|cliente|tarea)\b/.test(
       text,
     )
   )
