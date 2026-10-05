@@ -10,11 +10,15 @@ create table public.gmail_mev_connections (
   status text not null default 'CONNECTED' check (status in ('CONNECTED','DEGRADED','DISCONNECTED')),
   last_sync_at timestamptz,
   last_error_code text,
+  sync_lease_until timestamptz,
+  sync_fence integer not null default 0,
   created_by text not null references public.users(id),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint gmail_mev_mailbox_email check (mailbox_email = lower(mailbox_email))
 );
+
+grant select,insert,update,delete on public.gmail_mev_connections to monitor_runtime;
 
 alter table public.gmail_mev_connections enable row level security;
 create policy gmail_mev_owner_read on public.gmail_mev_connections

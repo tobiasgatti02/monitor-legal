@@ -11,6 +11,18 @@
       "passed": true
     },
     {
+      "name": "Gmail OAuth token is readable by owner only",
+      "passed": true
+    },
+    {
+      "name": "Gmail OAuth token is isolated across tenants",
+      "passed": true
+    },
+    {
+      "name": "Lawyer cannot change Gmail OAuth token",
+      "passed": true
+    },
+    {
       "name": "Reservation persisted before provider call",
       "passed": true
     },

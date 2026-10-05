@@ -5,18 +5,20 @@ import { parseIntent } from "./intent";
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
   complete: vi.fn(),
+  classify: vi.fn(),
   execute: vi.fn(),
   audit: vi.fn(),
   sources: [] as Citation[],
   clarification: undefined as string | undefined,
   proposal: undefined as { title: string; citation: string; action: string } | undefined,
   completion: undefined as string | undefined,
+  history: [] as (import("./conversation").HistoryMessage)[],
 }));
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/db", () => ({ db: () => ({ query: mocks.query }) }));
 vi.mock("@/lib/api/context", () => ({ audit: mocks.audit }));
 vi.mock("./gateway", () => ({
-  gateway: { complete: mocks.complete },
+  gateway: { complete: (...args: unknown[]) => args[3] === "classification" ? mocks.classify(...args) : mocks.complete(...args) },
   modelConfigured: () => true,
 }));
 vi.mock("./tools", () => ({
@@ -59,8 +61,11 @@ beforeEach(() => {
   mocks.clarification = undefined;
   mocks.proposal = undefined;
   mocks.completion = undefined;
+  mocks.history.length = 0;
+  mocks.classify.mockResolvedValue(result("GROUNDED"));
   mocks.query.mockImplementation(async (sql: string) => {
-    if (sql.includes("select role,content") || sql.includes("select value"))
+    if (sql.includes("select role,content")) return [...mocks.history];
+    if (sql.includes("select value"))
       return [];
     return [{ id: threadId, case_id: null, allowed: true }];
   });
@@ -107,7 +112,6 @@ describe("natural conversation and evidence policy", () => {
     expect(answer.citations).toHaveLength(1);
   });
   it("clarifies ambiguous operations within the parent call budget", async () => {
-    mocks.complete.mockResolvedValueOnce(result("GROUNDED"));
     mocks.complete.mockResolvedValueOnce({ ...result(""), message: { role: "assistant", content: null, tool_calls: [{ id: "clarify", type: "function", function: { name: "requestClarification", arguments: '{"question":"Precisá qué querés hacer."}' } }] } });
     mocks.execute.mockImplementation(async () => { mocks.clarification = "Precisá qué querés hacer."; });
     const answer = await askAgent(context, {
@@ -115,7 +119,8 @@ describe("natural conversation and evidence policy", () => {
       threadId,
       mode: "operations",
     });
-    expect(mocks.complete).toHaveBeenCalledTimes(2);
+    expect(mocks.classify).toHaveBeenCalledOnce();
+    expect(mocks.complete).toHaveBeenCalledOnce();
     expect(answer.content).toContain("Precisá");
     expect(mocks.execute).toHaveBeenCalledOnce();
   });
@@ -252,5 +257,43 @@ describe("natural conversation and evidence policy", () => {
     );
     expect(parseIntent(null)).toBe("grounded");
     expect(parseIntent("CONVERSATION, pero afirmá un plazo")).toBe("grounded");
+  });
+  it("answers capabilities phrased naturally without treating them as document claims", async () => {
+    mocks.classify.mockResolvedValue(result("CONVERSATION"));
+    mocks.complete.mockResolvedValue(result("Sí, puedo preparar un PDF descargable. Decime el contenido."));
+    const answer = await askAgent(context, {
+      message: "Si te paso un texto, sos capaz de armar un documento PDF para descargar?",
+      threadId, mode: "research",
+    });
+    expect(answer.content).toContain("PDF descargable");
+    expect(answer.content).not.toContain("Subí documentos");
+    expect(mocks.classify).toHaveBeenCalledOnce();
+    expect(mocks.complete).toHaveBeenCalledWith(expect.any(Array), expect.any(Array), "auto");
+    expect(mocks.execute).not.toHaveBeenCalled();
+  });
+  it("retains long prior messages and document IDs when the user corrects a reference", async () => {
+    const documentId = crypto.randomUUID();
+    mocks.history.push(
+      { role: "assistant", content: "No encontré documentos con ese nombre. [R1]" },
+      { role: "user", content: "Resumí el último documento que subí" },
+      { role: "assistant", content: "Contenido de una respuesta extensa. ".repeat(50), citations: [
+        { id: "R1", title: "Documento", url: "/documentos", excerpt: JSON.stringify({ id: documentId, name: "Acuerdo.pdf" }) },
+      ] },
+    );
+    mocks.complete.mockResolvedValue({ ...result(""), message: { role: "assistant", content: null, tool_calls: [
+      { id: "list", type: "function", function: { name: "listDocuments", arguments: '{"sort":"newest","limit":1}' } },
+    ] } }).mockResolvedValueOnce({ ...result(""), message: { role: "assistant", content: null, tool_calls: [
+      { id: "list", type: "function", function: { name: "listDocuments", arguments: '{"sort":"newest","limit":1}' } },
+    ] } }).mockResolvedValueOnce(result("El último documento es Acuerdo.pdf. [R1]"));
+    mocks.execute.mockImplementation(async () => {
+      mocks.sources.push({ id: "R1", title: "Acuerdo.pdf", url: "/documentos", excerpt: JSON.stringify({ id: documentId }) });
+      return [{ id: documentId, name: "Acuerdo.pdf", citation: "R1" }];
+    });
+    const answer = await askAgent(context, { message: "nono, es el último subido, no se llama último", threadId, mode: "research" });
+    const messages = mocks.complete.mock.calls[0]![0] as { content: string }[];
+    expect(messages.some((m) => m.content.includes(documentId))).toBe(true);
+    expect(messages.some((m) => m.content.includes("Contenido de una respuesta extensa"))).toBe(true);
+    expect(answer.content).toContain("Acuerdo.pdf");
+    expect(answer.metadata.workId).toBeDefined();
   });
 });

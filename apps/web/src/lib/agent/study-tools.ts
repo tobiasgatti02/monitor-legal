@@ -116,13 +116,38 @@ export function studyTools(
       },
     },
     listDocuments: {
-      description: "Listar documentos originales PDF/DOCX y su estado de extracción; obtener IDs antes de leer. Usá readDocument para leer páginas.",
-      schema: z.object({ search: z.string().max(300).default(""), caseId: caseSchema.optional() }).strict(),
-      execute: async (input: { search: string; caseId?: string }) => {
+      description: "Listar archivos autorizados con IDs y fecha de carga. search busca sólo texto literal del nombre, no contenido. Para el último subido o más reciente: search vacío, sort newest, limit 1; para el primero: oldest. offset permite seleccionar el siguiente/anterior del listado. No uses palabras de orden como búsqueda. Para leer contenido usá readDocument con el ID del resultado.",
+      schema: z.object({
+        search: z.string().max(300).default("").describe("Texto literal del nombre. Vacío para seleccionar por fecha u orden."),
+        caseId: caseSchema.optional(),
+        sort: z.enum(["newest", "oldest"]).default("newest").describe("Orden por fecha de carga, no por fecha del contenido."),
+        limit: z.number().int().min(1).max(20).default(20),
+        offset: z.number().int().min(0).max(1000).default(0),
+        uploadedFrom: z.string().datetime({ offset: true }).optional(),
+        uploadedBefore: z.string().datetime({ offset: true }).optional(),
+      }).strict(),
+      execute: async (input: { search: string; caseId?: string; sort: "newest" | "oldest"; limit: number; offset: number; uploadedFrom?: string; uploadedBefore?: string }) => {
+        if (input.caseId) caseScope(input.caseId);
         const id = selectedCase ?? input.caseId;
-        if (id) caseScope(id);
-        const rows = await db().query("select d.id,d.name,d.case_id,d.mime_type,d.size_bytes,k.status as extraction_status from documents d left join knowledge_documents k on k.document_id=d.id and k.tenant_id=d.tenant_id where d.tenant_id=$1 and d.deleted_at is null and ($2::uuid is null or d.case_id=$2) and ($3='' or d.name ilike '%'||$3||'%') order by d.created_at desc limit 20", [c.tenantId, id ?? null, input.search]);
-        return record(rows, "documentos", "No encontré documentos accesibles.");
+        const order = input.sort === "oldest" ? "asc" : "desc";
+        const rows = await db().query(`select d.id,d.name,d.case_id,d.mime_type,d.size_bytes,d.created_at as "uploadedAt",k.status as extraction_status
+          from documents d left join knowledge_documents k on k.document_id=d.id and k.tenant_id=d.tenant_id
+          where d.tenant_id=$1 and d.deleted_at is null and ($2::uuid is null or d.case_id=$2)
+            and ($3='' or d.name ilike '%'||$3||'%')
+            and ($4::timestamptz is null or d.created_at >= $4::timestamptz)
+            and ($5::timestamptz is null or d.created_at < $5::timestamptz)
+          order by d.created_at ${order},d.id ${order} limit $6 offset $7`,
+          [c.tenantId, id ?? null, input.search, input.uploadedFrom ?? null, input.uploadedBefore ?? null, input.limit, input.offset]);
+        const empty = input.search
+          ? `No hay documentos accesibles cuyo nombre coincida con «${input.search}» dentro de los filtros consultados. No se buscó en su contenido.`
+          : "No hay documentos accesibles dentro de los filtros y la posición consultados.";
+        return {
+          records: record(rows, "documentos", empty),
+          returnedCount: rows.length,
+          filters: { ...input, caseId: id },
+          searchedField: "name",
+          orderedBy: "uploadedAt",
+        };
       },
     },
     readDocument: {

@@ -34,6 +34,12 @@ try:
  insert into document_versions(tenant_id,document_id,version,storage_key,content_hash,size_bytes,created_by) values('10000000-0000-4000-8000-000000000001','30000000-0000-4000-8000-000000000001',1,'synthetic','checksum',42,'synthetic-a');''')
  actor='synthetic-a';tenant='10000000-0000-4000-8000-000000000001';case='20000000-0000-4000-8000-000000000001';doc='30000000-0000-4000-8000-000000000001'
  check('Runtime cannot bypass RLS',query("select not rolbypassrls and not rolsuper from pg_roles where rolname=current_user",actor)=='t')
+ gmail_connector=query(f"insert into connectors(tenant_id,source,account_label,created_by) values('{tenant}','MEV_SCBA','Gmail MEV (avisos)','{actor}') returning id",actor)
+ query(f"insert into gmail_mev_connections(tenant_id,connector_id,mailbox_email,refresh_token_encrypted,granted_scope,created_by) values('{tenant}','{gmail_connector}','example@synthetic.test','synthetic-encrypted-token','https://www.googleapis.com/auth/gmail.readonly','{actor}')",actor)
+ check('Gmail OAuth token is readable by owner only',query("select count(*) from gmail_mev_connections",actor)=='1' and query("select count(*) from gmail_mev_connections",'synthetic-b')=='0')
+ check('Gmail OAuth token is isolated across tenants',query("select count(*) from gmail_mev_connections",'synthetic-c')=='0')
+ denied_update=query("update gmail_mev_connections set refresh_token_encrypted='changed' returning tenant_id",'synthetic-b')
+ check('Lawyer cannot change Gmail OAuth token',denied_update=='' and query("select refresh_token_encrypted from gmail_mev_connections",actor)=='synthetic-encrypted-token')
  work=query(f"insert into ai_work(tenant_id,user_id,profile,case_id) values('{tenant}','{actor}','document','{case}') returning id",actor)
  call=f"select app.reserve_ai_attempt('{work}','test','cloudflare','@cf/qwen/qwen3-30b-a3b-fp8','v1','cf-2026-10-04','official',1000,600)"
  with ThreadPoolExecutor(2) as pool:

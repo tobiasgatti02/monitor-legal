@@ -5,7 +5,7 @@ import type { ApiContext } from "@/lib/api/context";
 import { ApiError } from "@/lib/api/errors";
 
 export const profiles = {
-  study: { input: 96000, output: 4800, calls: 8, tools: 12, perCall: 600 },
+  study: { input: 96000, output: 12800, calls: 8, tools: 12, perCall: 1600 },
   classification: {
     input: 1500,
     output: 128,

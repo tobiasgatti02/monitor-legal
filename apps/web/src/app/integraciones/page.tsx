@@ -1,20 +1,24 @@
 import { AppShell } from "@/components/app-shell";
 import { ResourceWorkspace } from "@/components/resource-workspace";
 import { demoMode } from "@/lib/demo-mode";
+import { GmailMevIntegration } from "@/components/gmail-mev-integration";
 
 export default function IntegrationsPage() {
   return (
     <AppShell>
+      {!demoMode() && (
+        <GmailMevIntegration expectedEmail={process.env.GMAIL_MEV_ALLOWED_MAILBOX ?? ""} />
+      )}
       <ResourceWorkspace
         title="Integraciones"
-        description="Estado de conexiones judiciales. Los errores nunca se ocultan."
+        description="Estado de conexiones judiciales y transportes de avisos. Los errores nunca se ocultan."
         endpoint="/api/integrations"
         createLabel="Nueva integración"
         demo={demoMode()}
         allowDelete={false}
         columns={[
           { key: "accountLabel", label: "Cuenta" },
-          { key: "source", label: "Portal", kind: "status" },
+          { key: "source", label: "Procedencia", kind: "status" },
           { key: "status", label: "Estado", kind: "status" },
           { key: "lastSuccessAt", label: "Último éxito", kind: "date" },
           { key: "lastErrorCode", label: "Último error" },
