@@ -10,6 +10,7 @@ Los ensayos SQL prueban RLS y efectos reales en un PostgreSQL efímero. El recor
 - `agent-node-validation.json`: recorrido funcional con tres llamadas simuladas (embedding, extracción y sección). Conserva cantidad de consultas y bytes lógicos de resultados. Esos bytes no son egress de red de Neon.
 - `agent-memory-validation.json`: diez ingestas secuenciales de textos pequeños con proveedor/R2 simulados; tiempos incluyen el puente `psql` del test. RSS/heap del proceso Node y p50/p95 quedan en el reporte. No extrapolar a PDFs grandes ni latencia real del proveedor.
 - `agent-pdf-memory-validation.json`: diez parseos secuenciales reales de PDF sintético de tres páginas (42.220 bytes), parser destruido en `finally`. El primer parseo incluye imports/carga nativa; p95 refleja ese arranque. Pico por muestreo, no profiler nativo exhaustivo. No cubre archivo máximo de 5 MB/200 páginas.
+- `agent-worker-validation.json`: workerd/R2 local, diez derivados de casi 4 MiB y heap por inspector. El runtime instalado usa compatibility date 2026-09-23, anterior al objetivo; las muestras después de peticiones excluyen pico/nativo y otros isolates. No hubo llamadas AI ni R2 remoto. Repetir con runtime objetivo.
 - Ledger sintético: tarifa aplicada a usage de mocks y reservas de auxiliares sin usage. No es consumo ni factura real. Llamadas reales del producto en estos ensayos: cero; comunicaciones enviadas: cero. Consumo del agente de implementación no disponible: no se informa como cero.
 
 ## Gate previo a piloto

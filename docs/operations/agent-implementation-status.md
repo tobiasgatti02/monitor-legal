@@ -1,26 +1,44 @@
 # Avance de implementación — 2026-10-04
 
-Alcance autorizado: código, interfaz, migraciones y ensayos aislados. Sin despliegue público, modificaciones de producción ni comunicaciones reales. Se preservaron los cambios previos en alerts-workspace.tsx y legal-agent.md.
+Alcance autorizado ejecutado: código, interfaz, nueve migraciones aditivas, pruebas aisladas y preparación de despliegue. Sin cambios de producción, despliegue público ni comunicaciones reales. Se conservaron los cambios anteriores en `alerts-workspace.tsx`, `legal-agent.md` y los documentos del plan. El snapshot Git `aac0c11` apareció durante la validación; no se reescribió ni se hizo otro commit desde esta implementación.
 
-| Tarea | Dependencias | Estado | Evidencia / pendiente |
+«Comprobado local» significa código ejercitado con los límites del entorno documentado, no servicio externo activo ni validación jurídica. Las flags nuevas están apagadas por defecto y no se editaron los archivos de secretos existentes.
+
+| Tarea | Dependencias | Resultado y evidencia | Pendiente para activación/piloto |
 |---|---|---|---|
-| T0 Medición y perfiles | — | En curso | Baseline: 28 tests en 5 archivos, 314 ms; clasificación y generación: al menos 2 llamadas por mensaje libre. Falta ledger por intento. |
-| T1 Reservas y rutas | T0 | Pendiente | Reservas previas, límites distribuidos y rutas conservadoras. |
-| T2 Ejecución durable | T0–T1 | Pendiente | Extender jobs; sacar indexación de finalize. |
-| T3 Carpeta viva | T2 | Pendiente | Evidencia estable, hechos y revisión. |
-| T4 Extracción compartida | T2–T3 | Pendiente | Cobertura, reanudación, cache privado versionado. |
-| T5 Documentación pendiente | T3–T4 | Pendiente | Checklist, dependencias y parte diario. |
-| T6 Accidentes de trabajo | T4–T5 | Pendiente | Requiere datos compartidos; modelos reales del abogado aún no aportados. |
-| T7 Salud | T4–T5 | Pendiente | No inferir urgencia ni plazo procesal. |
-| T8 Laboral | T4–T5 | Pendiente | Datos/entrevista; reglas jurídicas pendientes. |
-| T9 Sucesiones | T4–T5 | Pendiente | Vínculos documentados; sin inferencia de derechos. |
-| T10 Escritos | T3–T4 | Pendiente | Plantillas aprobadas, evidencia y DOCX. |
-| T11 Conexiones | T2–T5 | Pendiente | Importación manual; MEV/SCBA sin sesión autorizada verificada. |
-| T12 Investigación | T1–T3,T10 | Pendiente | Fuentes oficiales permitidas; textos/vigencia deben verificarse. |
-| T13 Comunicación y voz | T2–T5 | Pendiente | Sólo borradores, sin envío real; voz requiere canal verificado. |
-| T14 Cálculos | T3,T8 | Pendiente | Motor decimal; activación jurídica requiere reglas y casos revisados. |
-| T15 Evaluación | Transversal | En curso | Fixtures técnicos no equivalen a validación jurídica. |
+| T0 Medición | — | Implementado y medido local: ledger `ai_work/ai_attempts/ai_buckets`, perfiles, tarifas versionadas, métricas de DB y 114.62/heap; reportes JSON. | Baseline remoto comparable, factura/cuenta compartida, tiempo de revisión y egress real. |
+| T1 Presupuestos | T0 | Comprobado local: reserva previa atómica, actor/estudio/app, concurrencia, retries/auxiliares, usage ausente no cero, días UTC; clasificación descontada del padre y aclaración conservadora. | Ajustar techos con cuota real de cuenta y evaluación; no activar otro proveedor sin ensayo/tarifa. |
+| T2 Durable | T0–T1 | Comprobado local: finalize + enqueue transaccional, `jobs` con lease/fencing/checkpoints, Node por pasos, scheduler estrecho; retry/cancel/continue y polling limitado. Doble worker, replay, interrupción y revocación en SQL. | Ensayo de scheduler y límites del host real/R2 de prueba; no depender de pestaña o `waitUntil`. |
+| T3 Carpeta viva | T2 | Comprobado local: hechos/cronología/personas/bienes, original y normalizado, fuente/version/hash/página/offsets, revisión e historia, FK tenant/case, invalidación y referencias vigentes al guardar/leer. | Revisión del abogado sobre expedientes reales anonimizados. |
+| T4 Extracción | T2–T3 | Comprobado local: unidades versionadas, JSON estricto, fecha literal válida, una reparación, cobertura explícita, reserva agregada, continuación limitada, reutilización de unidades/vectores. OCR secuencial cancelable libera canvas/parser/worker. | Provider/OCR mixto real, tipificación documental especializada, fixtures máximos admitidos y perfil de memoria nativa. |
+| T5 Pendientes | T3–T4 | Comprobado local: listas sintéticas versionadas/configurables, responsables, dependencias, fechas de gestión, parte diario y alertas explicables sin IA, idempotencia y preferencias/quiet hours. | Confirmar pertinencia y listas del estudio. |
+| T6 Accidentes | T4–T5 | Implementado y probado con ocho variantes sintéticas: cronología, matriz hecho/prueba/faltante, discrepancias explícitas, entrevista e índice; sin inferencia clínica. Comparte T4/T10. | Modelos reales de reclamo/escrito y evaluación del abogado. |
+| T7 Salud | T4–T5 | Implementado y probado con ocho variantes; carpeta/lista/relato/índice; obligación con fuente confirmada registrada por abogado en `tasks`, fecha manual, cancelada si cambia la fuente. | Criterios/listas por tipo de caso y jurisdicción; no inferir urgencia ni plazos. |
+| T8 Laboral | T4–T5 | Implementado y probado con ocho variantes: relación relatada/documentada, recibos/comunicaciones, cronología/entrevista/discrepancias y prueba pendiente. | Inputs/reglas de liquidación revisados; cálculos legales deshabilitados. |
+| T9 Sucesiones | T4–T5 | Implementado y probado con ocho variantes: personas/vínculos/bienes registrados, etapas, responsables, pedidos y dependencias configurables. | Modelos/documentación por persona; no inferir herederos ni cuotas. |
+| T10 Escritos | T3–T4 | Comprobado local: biblioteca sintética/modelo del abogado, versiones inmutables/aprobación, sección presupuestada, conservación de secciones vigentes, editor simple/versiones, claims-evidence, revisión de fuente y DOCX editable comprobado visualmente. | Ensayo semántico real y modelos aprobados; afirmaciones jurídicas automáticas requieren autoridades verificadas. Revisión con el mismo modelo no demuestra calidad legal. |
+| T11 Conexiones | T2–T5 | Importación manual comprobada: MEV, Notificaciones SCBA y PJN distinguidos, texto/fecha/procedencia/hash/dedupe y estado para revisión. | Adaptadores MEV/Notificaciones sin sesión legítima verificada: deshabilitados; no se inventó API ni se resolvieron captchas. |
+| T12 Investigación | T1–T3,T10 | Fuentes manuales/local search comprobados; lector HTTPS oficial implementado con allowlist/DNS fijado/SSRF, redirects/tamaño/tiempo, seis fuentes atómicas, fragmento/hash/metadatos y favorable/adverso. | Búsqueda pública automatizada JUBA y fetch del backend real aún no verificados; vigencia/metadatos aportados no validados jurídicamente. Flag apagada. |
+| T13 Comunicación/voz | T2–T5 | Borrador basado en actividad revisada/pendientes y aprobación comprobados; estado final `DRAFT`, cero envíos. Se conserva recepción documental existente. | Canal real y transcripción/política de audio: voz deshabilitada. |
+| T14 Cálculos | T3,T8 | Motor aritmético determinista con centavos `BigInt`, inputs/supuestos/regla y redondeo versionados; persiste escenario. Reutiliza honorarios/pagos. | Fórmulas/índices/plazos jurídicos y casos esperados del abogado: deshabilitados. |
+| T15 Evaluación | Transversal | 113 tests/10 archivos, 40 checks SQL, UI escritorio/móvil, DOCX tres páginas, 10 ingestas/textos, 10 parseos PDF y 10 derivados en workerd local. Ver `agent-evaluation.md` y reportes. | Evaluación jurídica representativa y conjunto reservado, recuperación/recall real, memoria máxima/crecimiento sostenido, staging Neon17 y piloto. No se declara superioridad. |
 
-## Consumo y baseline
+## Checks al cierre
 
-La duración anterior corresponde a Vitest local, sin llamadas a proveedores. Los tests existentes usan mocks: sus tokens no son consumo real. Consumo del agente de implementación no disponible en este entorno; no se estima como cero. Se medirán llamadas del producto por intento, tokens reportados/estimados, duración, neurons y tarifa marginal; no equivalen a factura ni a cuota de toda la cuenta. No hay evaluación del tiempo de revisión del abogado ni comparación jurídica representativa.
+`validate-agent-local.sh` crea su propio cluster loopback y ejecuta SQL, integración, parser, typecheck, lint y build. PostgreSQL 16 + pgvector 0.8.1, Node 22 en macOS arm64; runtime/actor bajo RLS real. Los servicios externos del producto están simulados. Build y lint/typecheck pasaron; Vitest 113/113 en 28,85 s. Los avisos de Vite sobre formato de config y notices de migraciones previas no son fallas.
+
+Gateway: 15 tests de contrato de perfiles/namespace incluidos en Vitest. Además `agent-worker-local.mjs` ejecutó workerd/R2 local: diez escrituras y lecturas de 4.194.218 bytes, autenticación, replay inmutable y checksum. Compatibilidad local 2026-09-23 frente a objetivo 2026-10-03: repetir con runtime objetivo antes de promover. Heap por inspector registrado; no es pico completo de isolate/native ni garantiza el límite remoto.
+
+UI: componentes reales con API sintética, escritorio y 390×844; relato, obligación y aritmética comprobados; no hay overflow horizontal. DOCX: formato A4/Times New Roman, texto y referencias editables, render e inspección de tres páginas; no implica aprobación del escrito.
+
+## Consumo real y mediciones
+
+Llamadas reales del producto a proveedores IA: **0**. R2 remoto: **0**. Comunicaciones reales enviadas: **0**. Se hicieron consultas públicas de documentación y un intento de lectura de gestión Neon (401); no se mutó Neon ni producción. Consumo de tokens/costo del agente de implementación no disponible; no se estima como cero.
+
+Los tokens `reported` de los reportes de integración son valores de mocks. La tarifa sintética calculada no es factura ni ahorro real. En producción, `ai_attempts` registra consumo/origen/duración por intento, conserva reserva ante ausencia de usage y marca timeouts inciertos.
+
+Recorrido Node: 322 consultas, 238016 bytes lógicos de resultados, tres llamadas simuladas. Diez ingestas de textos: p50 1476 ms / p95 1862 ms; RSS pico 114.62 MiB e incremento 1.98 MiB. Diez parseos del PDF de tres páginas: pico 127.23 MiB, incremento 66.20 MiB; el primer parseo incluye carga nativa. Los valores son del host local, incluyen infraestructura del test y no cubren archivos máximos ni egress de Neon. Hay crecimiento residual de RSS en las muestras: no se declara cerrado el gate de ausencia de crecimiento sostenido.
+
+## Continuidad
+
+Próximo paso concreto: seguir `agent-deployment.md` en rama aislada verificada, repetir contratos reales y límites del host, aportar modelos/reglas/casos revisados y ejecutar `agent-evaluation.md`. No habilitar capacidades pendientes porque haya variables configuradas. Migraciones nuevas `202610040001`–`202610040009`; rollback por flags conserva originales, trabajos y auditoría. No se editó auth, stack, lockfile, secretos ni el cron de alertas de producción.

@@ -59,6 +59,10 @@
       "passed": true
     },
     {
+      "name": "Classifier cannot consume extra parent calls",
+      "passed": true
+    },
+    {
       "name": "Runtime cannot modify application quotas",
       "passed": true
     },
@@ -104,6 +108,22 @@
     },
     {
       "name": "Source changes invalidate confirmed facts without overwriting",
+      "passed": true
+    },
+    {
+      "name": "Dependent output is stale",
+      "passed": true
+    },
+    {
+      "name": "Publication rejects a changed source",
+      "passed": true
+    },
+    {
+      "name": "Template changes require a new version",
+      "passed": true
+    },
+    {
+      "name": "Manual event must declare its transport",
       "passed": true
     },
     {

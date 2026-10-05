@@ -12,6 +12,8 @@ PG_CONFIG=/opt/homebrew/opt/postgresql@16/bin/pg_config bash scripts/validate-ag
 
 En otros hosts, usar el `pg_config` de la instalación con pgvector. PostgreSQL 16 fue el host disponible en esta sesión; se debe repetir en PostgreSQL 17/Neon antes de promover. Los tests de integración usan RLS real y proveedor/R2 simulados. No verificar servicios externos contando esos mocks como llamadas reales.
 
+El ensayo opcional del Worker se ejecuta con `LEGAL_TEST_MINIFLARE_MODULE=/ruta/al/miniflare/dist/src/index.js node scripts/agent-worker-local.mjs`, usando la instalación local de desarrollo existente. No instala dependencias ni usa credenciales Cloudflare, AI remoto o cron. Registra heap de workerd/R2 local; usa fecha de compatibilidad 2026-09-23 por límite del binario instalado. Repetir con la fecha objetivo y medir picos antes del piloto.
+
 Para ejecutar sólo las pruebas normales: `npm run test:web`. Para SQL y recorrido durable, el script anterior inicia el cluster requerido. Los reportes generados están en `agent-*-validation.json`; no contienen documentos reales, prompts ni secretos. La fixture PDF es sintética, de tres páginas. Se comprobó visualmente el DOCX exportado con LibreOffice, tres páginas sin cortes ni superposiciones.
 
 ## Entorno aislado y orden de promoción

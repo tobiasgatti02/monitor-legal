@@ -3,9 +3,9 @@
   "providerCallsReal": 0,
   "providerCallsSimulated": 3,
   "queries": 322,
-  "logicalResponseBytes": 238050,
-  "rss": 97402880,
-  "heap": 53612968,
+  "logicalResponseBytes": 238016,
+  "rss": 117997568,
+  "heap": 44483328,
   "coverage": "complete for one synthetic source; no legal evaluation",
   "communicationSends": 0,
   "journey": "ingestion, replay, fact correction, checklist, procedure, template, draft/edit, event dedupe, research, client draft/approval, health obligation"
