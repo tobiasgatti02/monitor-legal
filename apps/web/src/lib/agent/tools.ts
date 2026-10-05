@@ -5,6 +5,7 @@ import { requireWrite, type ApiContext } from "@/lib/api/context";
 import { actionSchema, type Citation, type ToolDefinition } from "./contracts";
 import { retrieve } from "./retrieval";
 import { ApiError } from "@/lib/api/errors";
+import { studyTools } from "./study-tools";
 
 const lookupSchema = z
   .object({
@@ -27,7 +28,9 @@ export function agentTools(
   let retrievalMode = "none";
   let clarification: string | undefined;
   let proposal: { title: string; citation: string; action: string } | undefined;
+  let completion: string | undefined;
   const implementations = {
+    ...studyTools(context, caseId, records, (message) => { completion = message; }),
     requestClarification: {
       description:
         "Pedir un dato que falta para continuar, por ejemplo la causa o el tipo de escrito. Formular solo una pregunta, sin afirmar hechos ni derecho no verificado.",
@@ -284,6 +287,9 @@ export function agentTools(
     },
     get proposal() {
       return proposal;
+    },
+    get completion() {
+      return completion;
     },
     get clarification() {
       return clarification;

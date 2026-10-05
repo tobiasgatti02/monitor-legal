@@ -264,6 +264,7 @@ export default {
         );
       if (path === "/chat/completions") {
         const profiles: Record<string, number> = {
+          study: 600,
           classification: 128,
           brief: 600,
           document: 600,

@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   sources: [] as Citation[],
   clarification: undefined as string | undefined,
   proposal: undefined as { title: string; citation: string; action: string } | undefined,
+  completion: undefined as string | undefined,
 }));
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/db", () => ({ db: () => ({ query: mocks.query }) }));
@@ -30,6 +31,7 @@ vi.mock("./tools", () => ({
     get proposal() {
       return mocks.proposal;
     },
+    get completion() { return mocks.completion; },
   }),
 }));
 
@@ -56,6 +58,7 @@ beforeEach(() => {
   mocks.sources.length = 0;
   mocks.clarification = undefined;
   mocks.proposal = undefined;
+  mocks.completion = undefined;
   mocks.query.mockImplementation(async (sql: string) => {
     if (sql.includes("select role,content") || sql.includes("select value"))
       return [];
@@ -65,13 +68,14 @@ beforeEach(() => {
 });
 
 describe("natural conversation and evidence policy", () => {
-  it("prepares the requested personal task without calling AI or asking for documents", async () => {
+  it("creates the requested personal task without calling AI or asking for documents", async () => {
     mocks.execute.mockImplementation(async (name: string, raw: string) => {
-      expect(name).toBe("proposeAction");
-      const task = JSON.parse(raw);
-      expect(task.action).toBe("CREATE_TASK");
+      expect(name).toBe("createStudyRecord");
+      const input = JSON.parse(raw);
+      expect(input.module).toBe("tasks");
+      const task = input.data;
       expect(task.caseId).toBeUndefined();
-      mocks.proposal = { title: task.title, citation: "R1", action: task.action };
+      mocks.completion = "Creé el registro solicitado. [R1]";
       mocks.sources.push({ id: "R1", title: task.title, url: "/agente", excerpt: "PENDING" });
     });
     const answer = await askAgent(context, {
@@ -79,7 +83,7 @@ describe("natural conversation and evidence policy", () => {
       threadId, mode: "research",
     });
     expect(answer.content).toContain("Llamar a luis");
-    expect(answer.content).toContain("pendiente de tu aprobación");
+    expect(answer.content).toContain("Creé el registro");
     expect(answer.content).not.toContain("Subí documentos");
     expect(mocks.complete).not.toHaveBeenCalled();
     expect(mocks.query).not.toHaveBeenCalledWith(expect.stringContaining("insert into ai_work"), expect.anything());
@@ -87,14 +91,16 @@ describe("natural conversation and evidence policy", () => {
   });
   it("clarifies ambiguous operations within the parent call budget", async () => {
     mocks.complete.mockResolvedValueOnce(result("GROUNDED"));
+    mocks.complete.mockResolvedValueOnce({ ...result(""), message: { role: "assistant", content: null, tool_calls: [{ id: "clarify", type: "function", function: { name: "requestClarification", arguments: '{"question":"Precisá qué querés hacer."}' } }] } });
+    mocks.execute.mockImplementation(async () => { mocks.clarification = "Precisá qué querés hacer."; });
     const answer = await askAgent(context, {
       message: "¿Y con eso?",
       threadId,
       mode: "operations",
     });
-    expect(mocks.complete).toHaveBeenCalledOnce();
+    expect(mocks.complete).toHaveBeenCalledTimes(2);
     expect(answer.content).toContain("Precisá");
-    expect(mocks.execute).not.toHaveBeenCalled();
+    expect(mocks.execute).toHaveBeenCalledOnce();
   });
   it.each(["hola", "¿Cómo se usa el agente?", "Gracias por la ayuda"])(
     "answers %s without requiring documents",

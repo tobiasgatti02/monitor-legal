@@ -60,7 +60,7 @@ export function citedSources(answer: string, sources: Citation[]) {
   return [...new Set(ids)].map((id) => allowed.get(id)!);
 }
 export function boundedText(value: unknown, size = 14000) {
-  const text = JSON.stringify(value);
+  const text = JSON.stringify(value) ?? "null";
   return text.length <= size
     ? text
     : JSON.stringify({ truncated: true, text: text.slice(0, size) });

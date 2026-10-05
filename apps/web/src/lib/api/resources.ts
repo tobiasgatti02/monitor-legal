@@ -480,8 +480,9 @@ export async function listResource(
   request: Request,
   resource: ResourceName,
   forcedFilters: Record<string, string> = {},
+  actorContext?: ApiContext,
 ): Promise<Response> {
-  const context = await apiContext(request);
+  const context = actorContext ?? await apiContext(request);
   const config: ResourceConfig = resources[resource];
   const url = new URL(request.url);
   const pagination = paginationFrom(request);
@@ -541,8 +542,9 @@ export async function getResource(
   request: Request,
   route: RouteParams | undefined,
   resource: ResourceName,
+  actorContext?: ApiContext,
 ): Promise<Response> {
-  const context = await apiContext(request);
+  const context = actorContext ?? await apiContext(request);
   const config: ResourceConfig = resources[resource];
   const id = (await route?.params)?.id;
   if (!id) throw new ApiError(400, "ID_REQUIRED", "Falta el identificador.");
@@ -553,8 +555,9 @@ export async function createResource(
   request: Request,
   resource: ResourceName,
   forced: Record<string, unknown> = {},
+  actorContext?: ApiContext,
 ): Promise<Response> {
-  const context = await apiContext(request);
+  const context = actorContext ?? await apiContext(request);
   requireWrite(context);
   const config: ResourceConfig = resources[resource];
   const input = {
@@ -583,8 +586,9 @@ export async function updateResource(
   request: Request,
   route: RouteParams | undefined,
   resource: ResourceName,
+  actorContext?: ApiContext,
 ): Promise<Response> {
-  const context = await apiContext(request);
+  const context = actorContext ?? await apiContext(request);
   requireWrite(context);
   const config: ResourceConfig = resources[resource];
   const id = (await route?.params)?.id;
@@ -672,8 +676,9 @@ export async function deleteResource(
   request: Request,
   route: RouteParams | undefined,
   resource: ResourceName,
+  actorContext?: ApiContext,
 ): Promise<Response> {
-  const context = await apiContext(request);
+  const context = actorContext ?? await apiContext(request);
   requireWrite(context);
   const config: ResourceConfig = resources[resource];
   const id = (await route?.params)?.id;

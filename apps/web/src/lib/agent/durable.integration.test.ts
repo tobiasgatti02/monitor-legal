@@ -137,6 +137,8 @@ import { proposeClientDraft } from "./communication-drafts";
 import { decideApproval } from "./approvals";
 import { saveResearchSource } from "./research";
 import { loadFolder, folderMutation } from "./folder";
+import { agentTools } from "./tools";
+import { createAgentDocument, readAgentDocument } from "./study-documents";
 const root = resolve(process.cwd(), "../..");
 const c = {
   actorId: "fixture-owner",
@@ -224,6 +226,25 @@ suite(
       vi.unstubAllGlobals();
       vi.unstubAllEnvs();
     });
+    it("operates clients, causes, tasks, histories and PDF files through real RLS and shared API validation", async () => {
+      const tools = agentTools(c, crypto.randomUUID());
+      const created = await tools.execute("createStudyRecord", JSON.stringify({ module: "clients", data: { fullName: "Cliente sintético agente", notes: "Historia inicial reportada por el usuario." } })) as { records: { id: string }[] };
+      const client = created.records[0]!.id;
+      const createdCase = await tools.execute("createStudyRecord", JSON.stringify({ module: "cases", data: { title: "Causa sintética agente", clientId: client, jurisdiction: "Prueba" } })) as { records: { id: string }[] };
+      const caseId = createdCase.records[0]!.id;
+      await tools.execute("updateStudyRecord", JSON.stringify({ module: "clients", id: client, data: { notes: "Historia ampliada solicitada por el usuario." } }));
+      const createdTask = await tools.execute("createStudyRecord", JSON.stringify({ module: "tasks", data: { title: "Llamar a Luis", dueAt: "2027-01-02T19:00:00-03:00" } })) as { records: { id: string; caseId: string | null }[] };
+      expect(createdTask.records[0]!.caseId).toBeNull();
+      await tools.execute("updateStudyRecord", JSON.stringify({ module: "tasks", id: createdTask.records[0]!.id, data: { status: "DONE" } }));
+      expect(sqlResult("select completed_at is not null as completed from tasks where id=$1", [createdTask.records[0]!.id])[0]!.completed).toBe(true);
+      const pdf = await createAgentDocument(c, { title: "Historia sintética", body: "Historia reportada. El señor Pérez pidió una llamada a las 19 hs.", format: "pdf", caseId });
+      const pages = await readAgentDocument(c, pdf.id, caseId, 1, 2);
+      expect(pages.pages[0]!.text).toContain("Pérez");
+      expect(pages.needsOcr).toBe(false);
+      writeFileSync(resolve(root, ".private/agent-generated-pdf-validation.pdf"), Buffer.from(sqlResult("select encode(content,'base64') as content from document_blobs where document_id=$1", [pdf.id])[0]!.content, "base64"));
+      await expect(readAgentDocument(c, pdf.id, cause, 1, 1)).rejects.toMatchObject({ code: "NOT_FOUND" });
+      expect(sqlResult("select count(*)::int as n from audit_logs where action='AGENT_DOCUMENT_CREATED' and entity_id=$1", [pdf.id])[0]!.n).toBe(1);
+    }, 30000);
     it("persists steps, extracts once, preserves originals and reuses unchanged units", async () => {
       const id = crypto.randomUUID(),
         text =
@@ -427,7 +448,7 @@ suite(
       });
       expect((await loadFolder(c, cause)).obligations).toHaveLength(1);
       expect(
-        sqlResult("select due_at::text as date from tasks")[0].date,
+        sqlResult("select due_at::text as date from tasks where title='Revisar obligación sintética'")[0].date,
       ).toContain("2026-10-05");
       const report = {
         environment:
