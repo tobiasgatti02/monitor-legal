@@ -18,7 +18,15 @@ type Draft = {
   body: string;
   stale: boolean;
   revision: number;
-  metadata: { templateId?: string };
+  metadata: {
+    templateId?: string;
+    draftType?: string;
+    coverage?: {
+      totalDocuments: number;
+      documentsWithConfirmedFacts: number;
+      pendingDocuments: { id: string; name: string; status: string | null }[];
+    };
+  };
 };
 export function DraftWorkspace({
   caseId,
@@ -102,6 +110,27 @@ export function DraftWorkspace({
         hechos confirmados y fuentes comprobables.
       </p>
       {error && <p role="alert">{error}</p>}
+      <div className="folder-output">
+        <h3>Carta documento de esta causa</h3>
+        <p>
+          Prepara un borrador con los hechos documentados y confirmados de todos
+          los archivos vinculados. Señala cuáles siguen sin hechos confirmados o
+          sin extracción completa. El requerimiento, el plazo y el destinatario
+          quedan para revisión del abogado; no se envía desde aquí.
+        </p>
+        <button
+          type="button"
+          disabled={busy}
+          className="secondary-button"
+          onClick={() =>
+            void send(`/api/cases/${caseId}/drafts`, {
+              action: "PREPARE_LETTER",
+            })
+          }
+        >
+          Preparar carta documento
+        </button>
+      </div>
       <details>
         <summary>Incorporar modelo del estudio</summary>
         <form
@@ -285,6 +314,25 @@ export function DraftWorkspace({
               ? "Fuentes o datos cambiaron; revisar y regenerar"
               : "Borrador editable para revisión"}
           </p>
+          {d.metadata.draftType === "CARTA_DOCUMENTO" && d.metadata.coverage ? (
+            <div>
+              <p>
+                Documentos vinculados: {d.metadata.coverage.totalDocuments}.
+                Con hechos confirmados: {d.metadata.coverage.documentsWithConfirmedFacts}.
+                Pendientes de revisión: {d.metadata.coverage.pendingDocuments.length}.
+              </p>
+              {d.metadata.coverage.pendingDocuments.length > 0 && (
+                <details>
+                  <summary>Ver documentos pendientes</summary>
+                  <ul>
+                    {d.metadata.coverage.pendingDocuments.map((doc) => (
+                      <li key={doc.id}>{doc.name} ({doc.status ?? "Sin indexar"})</li>
+                    ))}
+                  </ul>
+                </details>
+              )}
+            </div>
+          ) : null}
           {editing === d.id ? (
             <>
               <textarea

@@ -299,9 +299,14 @@ Preferencias (no evidencia): ${boundedText(memories, 600)}. ${caseId ? `Alcance:
               tool_call_id: call.id,
               content: boundedText(value),
             });
+            if (tools.proposal || tools.clarification) break;
           }
           if (tools.proposal) {
             answer = `Preparé la propuesta «${tools.proposal.title}». Está pendiente de tu aprobación; todavía no se ejecutó ni se programó. Revisá los datos en la tarjeta de aprobación. [${tools.proposal.citation}]`;
+            break;
+          }
+          if (tools.clarification) {
+            answer = tools.clarification;
             break;
           }
         }

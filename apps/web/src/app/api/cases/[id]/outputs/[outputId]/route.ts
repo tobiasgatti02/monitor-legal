@@ -34,6 +34,18 @@ export const GET = api(async (r, route) => {
     refs.push(
       `${f.label}: ${f.passage}. Documento ${f.document_id}, versión ${f.source_version}, página/sección ${f.page}.`,
     );
+  if (output.metadata.draftType === "CARTA_DOCUMENTO") {
+    const inventory = output.metadata.documentInventory as
+      | { name: string; status: string | null; extractionStatus: string | null }[]
+      | undefined;
+    refs.push(
+      "Control interno: cotejar destinatario, requerimiento, plazo y texto final con el abogado antes de utilizar esta carta.",
+    );
+    for (const doc of inventory ?? [])
+      refs.push(
+        `Documento considerado: ${doc.name}. Estado: ${doc.status ?? "sin indexar"}; extracción: ${doc.extractionStatus ?? "pendiente"}.`,
+      );
+  }
   const docx = exportDocx(output.title, output.body, refs);
   return new Response(new Uint8Array(docx), {
     headers: {

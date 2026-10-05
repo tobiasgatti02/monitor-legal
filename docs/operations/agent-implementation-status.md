@@ -1,5 +1,9 @@
 # Avance de implementación — 2026-10-04
 
+## Solicitud posterior de activación
+
+El usuario autorizó incluir producción el 2026-10-04. Inspección de solo lectura: existe proyecto Vercel `monitor-legal`, con despliegues de producción recientes; las variables de producción aún no incluyen las cinco flags `LEGAL_*`. La URL directa local llega a Neon PostgreSQL 17 como `neondb_owner`; no se encontraron tablas nuevas `ai_attempts`, `ai_work` ni `case_facts` en esa conexión. No se aplicaron migraciones ni se activaron flags: primero hay que identificar la rama de producción y ensayar las nueve migraciones en una rama aislada. El acceso de gestión Neon no está disponible desde la sesión actual. Los accesos MEV/Notificaciones, modelos aprobados, reglas jurídicas y política de audio siguen pendientes. Se preparó `activation-inputs.md` para recabar esas entradas sin compartir secretos.
+
 Alcance autorizado ejecutado: código, interfaz, nueve migraciones aditivas, pruebas aisladas y preparación de despliegue. Sin cambios de producción, despliegue público ni comunicaciones reales. Se conservaron los cambios anteriores en `alerts-workspace.tsx`, `legal-agent.md` y los documentos del plan. El snapshot Git `aac0c11` apareció durante la validación; no se reescribió ni se hizo otro commit desde esta implementación.
 
 «Comprobado local» significa código ejercitado con los límites del entorno documentado, no servicio externo activo ni validación jurídica. Las flags nuevas están apagadas por defecto y no se editaron los archivos de secretos existentes.

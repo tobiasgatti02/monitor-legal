@@ -84,7 +84,12 @@ export class ModelGateway {
       );
     const payload = {
       model: provider.model,
-      messages,
+      // Workers AI accepts tool calls, but requires string content in input messages.
+      // OpenAI-style assistant tool-call responses can contain null content.
+      messages: messages.map((message) => ({
+        ...message,
+        content: message.content ?? "",
+      })),
       temperature: 0.1,
       max_tokens: output,
       ...(tools.length ? { tools, tool_choice: toolChoice } : {}),

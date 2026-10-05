@@ -194,6 +194,7 @@ describe("natural conversation and evidence policy", () => {
       mode: "draft",
     });
     expect(answer.content).toBe(mocks.clarification);
+    expect(mocks.complete).toHaveBeenCalledOnce();
     expect(answer.content).not.toContain("Subí documentos");
   });
 

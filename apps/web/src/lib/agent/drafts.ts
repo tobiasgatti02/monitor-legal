@@ -14,6 +14,7 @@ import { createWork, withBudget } from "./budgets";
 import { gateway } from "./gateway";
 import { stripThinking } from "./core";
 import type { FolderFact } from "./procedures";
+import { buildLetterDraft, type LetterDocument } from "./letter-draft";
 export const templateSchema = z
   .object({
     title: z.string().min(1).max(200),
@@ -41,6 +42,7 @@ export const templateSchema = z
       c.addIssue({ code: "custom", message: "Secciones duplicadas" });
   });
 export const draftSchema = z.discriminatedUnion("action", [
+  z.object({ action: z.literal("PREPARE_LETTER") }).strict(),
   z
     .object({
       action: z.literal("GENERATE_SECTION"),
@@ -164,6 +166,75 @@ export async function draftMutation(
   requireCapability("drafts");
   requireWrite(c);
   const folder = await loadFolder(c, caseId);
+  if (input.action === "PREPARE_LETTER") {
+    const [documents, sourceFacts] = await Promise.all([
+      db().query(
+        `select d.id,d.name,k.status,k.extraction_status from documents d left join knowledge_documents k on k.document_id=d.id and k.tenant_id=d.tenant_id where d.tenant_id=$1 and d.case_id=$2 and d.deleted_at is null order by d.created_at,d.id limit 201`,
+        [c.tenantId, caseId],
+      ),
+      db().query(
+        `select * from case_facts where tenant_id=$1 and case_id=$2 order by created_at,id limit 201`,
+        [c.tenantId, caseId],
+      ),
+    ]);
+    if (documents.length > 200 || sourceFacts.length > 200)
+      throw new ApiError(
+        422,
+        "LETTER_SCOPE_LIMIT",
+        "La causa supera 200 documentos o hechos. Dividí el trabajo en grupos revisables; no se omitió evidencia silenciosamente.",
+      );
+    if (!documents.length)
+      throw new ApiError(
+        422,
+        "LETTER_DOCUMENTS_REQUIRED",
+        "Vinculá documentos a la causa antes de preparar la carta.",
+      );
+    const letter = buildLetterDraft(
+      folder.cause.title,
+      documents as LetterDocument[],
+      sourceFacts as unknown as FolderFact[],
+    );
+    if (!letter.confirmed.length)
+      throw new ApiError(
+        422,
+        "CONFIRMED_EVIDENCE_REQUIRED",
+        "Confirmá al menos un hecho documentado en la Carpeta viva. Los archivos sin hechos confirmados figurarán como pendientes.",
+      );
+    if (letter.body.length > 30000)
+      throw new ApiError(
+        422,
+        "LETTER_LENGTH_LIMIT",
+        "La carta supera 30.000 caracteres. Revisá la causa en grupos; no se recortó el texto.",
+      );
+    await verifyFacts(c, letter.confirmed);
+    const metadata = {
+      draftType: "CARTA_DOCUMENTO",
+      reviewRequired: true,
+      legalDemandPending: true,
+      coverage: letter.coverage,
+      documentInventory: (documents as LetterDocument[]).map((doc) => ({
+        id: doc.id,
+        name: doc.name,
+        status: doc.status,
+        extractionStatus: doc.extraction_status,
+      })),
+      evidence: letter.confirmed.map((fact) => ({
+        factId: fact.id,
+        documentId: fact.document_id,
+        version: fact.source_version,
+        checksum: fact.source_checksum,
+      })),
+    };
+    const inserted = await db().query(
+      `insert into case_outputs(tenant_id,case_id,kind,title,body,metadata,created_by) values($1,$2,'DRAFT','Carta documento — borrador',$3,$4::jsonb,$5) returning id`,
+      [c.tenantId, caseId, letter.body, JSON.stringify(metadata), c.actorId],
+    );
+    await audit(c, "LETTER_DRAFT_PREPARED", "case-output", inserted[0]!.id, {
+      totalDocuments: letter.coverage.totalDocuments,
+      pendingDocuments: letter.coverage.pendingDocuments.length,
+    });
+    return inserted[0];
+  }
   if (input.action === "SAVE_EDIT") {
     const old = folder.outputs.find((o) => o.id === input.id);
     if (!old || old.kind !== "DRAFT")

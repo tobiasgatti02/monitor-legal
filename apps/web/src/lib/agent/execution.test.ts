@@ -23,6 +23,30 @@ beforeEach(() => {
   mocks.query.mockResolvedValue([{ id: crypto.randomUUID() }]);
 });
 describe("budgets and provider accounting", () => {
+  it("sends tool-call continuation with string content and preserves call identifiers", async () => {
+    vi.stubEnv("LEGAL_AI_URL", "https://synthetic.invalid");
+    vi.stubEnv("LEGAL_AI_KEY", "synthetic");
+    const messages = [
+      { role: "assistant" as const, content: null, tool_calls: [{
+        id: "fixture-call", type: "function" as const,
+        function: { name: "fixture", arguments: "{}" },
+      }] },
+      { role: "tool" as const, tool_call_id: "fixture-call", content: '{"value":"OK"}' },
+    ];
+    const fetcher = vi.fn(async (_url, init: RequestInit) => {
+      const payload = JSON.parse(init.body as string);
+      expect(payload.messages[0]).toEqual({ ...messages[0], content: "" });
+      expect(payload.messages[1]).toEqual(messages[1]);
+      return Response.json({ choices: [{ message: { role: "assistant", content: "OK" } }] });
+    });
+    vi.stubGlobal("fetch", fetcher);
+    await withBudget(
+      { workId: crypto.randomUUID(), profile: "document", task: "test" },
+      () => new ModelGateway().complete(messages),
+    );
+    expect(fetcher).toHaveBeenCalledOnce();
+    expect(messages[0]!.content).toBeNull();
+  });
   it("reserves before fetch and accounts absent usage conservatively", async () => {
     vi.stubEnv("LEGAL_AI_URL", "https://synthetic.invalid");
     vi.stubEnv("LEGAL_AI_KEY", "synthetic");
