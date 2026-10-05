@@ -1,6 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+
+const subscribe = () => () => {};
+const serverCapabilities = () => 0;
+function browserCapabilities() {
+  const w = window as VoiceWindow;
+  return ((w.SpeechRecognition || w.webkitSpeechRecognition) && window.isSecureContext ? 1 : 0) | ("speechSynthesis" in window ? 2 : 0);
+}
 
 type Recognition = {
   lang: string;
@@ -19,7 +26,8 @@ type VoiceWindow = Window & {
 };
 
 export function useAgentAudio(updateText: (text: string) => void, send: (text: string) => void) {
-  const [supported, setSupported] = useState({ input: false, output: false });
+  const capabilities = useSyncExternalStore(subscribe, browserCapabilities, serverCapabilities);
+  const supported = { input: !!(capabilities & 1), output: !!(capabilities & 2) };
   const [listening, setListening] = useState(false);
   const [speakingId, setSpeakingId] = useState<string>();
   const [audioError, setAudioError] = useState("");
@@ -32,8 +40,6 @@ export function useAgentAudio(updateText: (text: string) => void, send: (text: s
 
   useEffect(() => { callbacks.current = { updateText, send }; });
   useEffect(() => {
-    const w = window as VoiceWindow;
-    setSupported({ input: !!(w.SpeechRecognition || w.webkitSpeechRecognition) && window.isSecureContext, output: "speechSynthesis" in window });
     return () => {
       const active = recognition.current;
       if (active) {

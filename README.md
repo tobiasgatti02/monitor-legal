@@ -199,3 +199,7 @@ Ver `docs/security/audit-2026-07-27.md`.
 ## Agente jurídico desplegado
 
 Aplicación: https://monitor-legal.vercel.app. Arquitectura, configuración inicial, límites, pruebas y operación en [docs/operations/legal-agent.md](docs/operations/legal-agent.md).
+
+El chat del agente incluye controles de audio: **Hablar** inicia dictado en español argentino; **Terminar dictado** permite revisar el texto y la flecha de envío termina la escucha y envía la consulta. Cada respuesta tiene **Escuchar** y se puede activar **Leer respuestas en voz alta**. El audio y el micrófono se detienen al cambiar de conversación o salir del chat. Las acciones mantienen sus aprobaciones habituales.
+
+El dictado requiere un navegador compatible, HTTPS (o localhost) y permiso de micrófono. Usa el servicio de reconocimiento del navegador, que puede procesar audio fuera del dispositivo; no se guardan archivos de audio en la aplicación. La reproducción utiliza las voces en español disponibles en el dispositivo. Véase [Web Speech API](https://developer.mozilla.org/en-US/docs/Web/API/Web_Speech_API). La entrada por teclado permanece disponible si el navegador no admite dictado.

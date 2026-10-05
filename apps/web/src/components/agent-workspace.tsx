@@ -507,7 +507,7 @@ export function AgentWorkspace() {
           </div>
           <p className="audio-help" role="status">
             {audio.listening
-              ? "Escuchando… Al terminar, presioná la flecha para enviar o Terminá el dictado para revisar el texto."
+              ? "Escuchando… Al terminar, presioná la flecha para enviar o usá Terminar dictado para revisar el texto."
               : audio.supported.input
                 ? "Podés dictar y enviar tu consulta. El navegador puede procesar el audio mediante su servicio de voz."
                 : "Dictado no disponible en este navegador. Podés seguir escribiendo tu consulta."}
