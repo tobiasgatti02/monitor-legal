@@ -1,3 +1,4 @@
+import { normalizeToolResponse } from "../../../apps/web/src/lib/agent/provider-response";
 type Stored = {
   body: ReadableStream;
   customMetadata?: Record<string, string>;
@@ -286,7 +287,7 @@ export default {
         input.max_tokens = Math.min(input.max_tokens, profiles[profile]);
         input.stream = false;
         delete input.model;
-        const result = await env.AI.run(model, input);
+        const result = normalizeToolResponse(await env.AI.run(model, input), input.tools);
         if (result.choices) return Response.json(result, { headers });
         const calls = (
           result.tool_calls as

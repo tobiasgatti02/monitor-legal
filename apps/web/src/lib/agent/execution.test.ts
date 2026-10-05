@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 const mocks = vi.hoisted(() => ({ query: vi.fn() }));
 vi.mock("@/lib/db", () => ({ db: () => ({ query: mocks.query }) }));
-import { estimateNeurons, tokenBound, withBudget } from "./budgets";
+import { estimateNeurons, reserveAttempt, tokenBound, withBudget } from "./budgets";
 import { ModelGateway } from "./gateway";
 import { deterministicRoute } from "./intent";
 import { validatedFacts } from "./extraction";
@@ -72,7 +72,7 @@ describe("budgets and provider accounting", () => {
   it("does not call provider when reservation fails", async () => {
     vi.stubEnv("LEGAL_AI_URL", "https://synthetic.invalid");
     vi.stubEnv("LEGAL_AI_KEY", "synthetic");
-    mocks.query.mockRejectedValue(new Error("quota"));
+    mocks.query.mockRejectedValue(new Error("DAILY_BUDGET_EXCEEDED"));
     const fetcher = vi.fn();
     vi.stubGlobal("fetch", fetcher);
     await expect(
@@ -84,6 +84,31 @@ describe("budgets and provider accounting", () => {
     ).rejects.toMatchObject({ code: "AI_BUDGET_LIMIT" });
     expect(fetcher).not.toHaveBeenCalled();
   });
+  it.each([
+    ["WORK_BUDGET_EXCEEDED", 429, "AI_WORK_BUDGET_LIMIT"],
+    ["CLASSIFICATION_BUDGET_EXCEEDED", 429, "AI_WORK_BUDGET_LIMIT"],
+    ["DOCUMENT_BUDGET_EXCEEDED", 429, "AI_WORK_BUDGET_LIMIT"],
+    ["AI_CONCURRENCY_LIMIT", 429, "AI_CONCURRENCY_LIMIT"],
+    ["CASE_CONCURRENCY_LIMIT", 429, "AI_CONCURRENCY_LIMIT"],
+    ["DOCUMENT_RESERVATION_EXPIRED", 409, "DOCUMENT_RESERVATION_EXPIRED"],
+    ["WORK_NOT_ACCESSIBLE", 403, "WORK_NOT_ACCESSIBLE"],
+  ])("reports reservation cause %s", async (reason, status, code) => {
+    mocks.query.mockRejectedValue(new Error(reason));
+    await expect(withBudget(
+      { workId: crypto.randomUUID(), profile: "brief", task: "test" },
+      () => reserveAttempt("@cf/qwen/qwen3-30b-a3b-fp8", {}, 600),
+    )).rejects.toMatchObject({ status, code });
+  });
+  it.each(["connection failed", "permission denied", "function does not exist"])(
+    "preserves database failures instead of claiming insufficient credit: %s", async (reason) => {
+      const error = new Error(reason);
+      mocks.query.mockRejectedValue(error);
+      await expect(withBudget(
+        { workId: crypto.randomUUID(), profile: "brief", task: "test" },
+        () => reserveAttempt("@cf/qwen/qwen3-30b-a3b-fp8", {}, 600),
+      )).rejects.toBe(error);
+    },
+  );
   it("accounts both timeout and retry before a successful response", async () => {
     vi.stubEnv("LEGAL_AI_URL", "https://synthetic.invalid");
     vi.stubEnv("LEGAL_AI_KEY", "synthetic");

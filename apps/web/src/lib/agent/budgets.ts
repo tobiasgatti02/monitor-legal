@@ -116,12 +116,32 @@ export async function reserveAttempt(
       ],
     );
     return { id: rows[0]!.id as string, input, output };
-  } catch {
-    throw new ApiError(
-      429,
-      "AI_BUDGET_LIMIT",
-      "No hay saldo o cupo para iniciar otra llamada. El avance queda guardado.",
-    );
+  } catch (error) {
+    // Only accounting exceptions indicate a limit. Connection, schema and
+    // permission failures must reach the API's normal error reporting.
+    if (!(error instanceof Error)) throw error;
+    switch (error.message) {
+      case "DAILY_BUDGET_EXCEEDED":
+        throw new ApiError(429, "AI_BUDGET_LIMIT",
+          "Se alcanzó el límite diario de IA de la aplicación, del estudio o de tu usuario. El avance queda guardado.");
+      case "WORK_BUDGET_EXCEEDED":
+      case "CLASSIFICATION_BUDGET_EXCEEDED":
+      case "DOCUMENT_BUDGET_EXCEEDED":
+        throw new ApiError(429, "AI_WORK_BUDGET_LIMIT",
+          "Este trabajo alcanzó su límite de llamadas o de contexto de IA. El avance queda guardado.");
+      case "AI_CONCURRENCY_LIMIT":
+      case "CASE_CONCURRENCY_LIMIT":
+        throw new ApiError(429, "AI_CONCURRENCY_LIMIT",
+          "Hay otra llamada de IA en curso. Esperá a que termine y volvé a intentar.");
+      case "DOCUMENT_RESERVATION_EXPIRED":
+        throw new ApiError(409, "DOCUMENT_RESERVATION_EXPIRED",
+          "Venció la reserva de IA del documento. Continuá la extracción para iniciar otro segmento.");
+      case "WORK_NOT_ACCESSIBLE":
+        throw new ApiError(403, "WORK_NOT_ACCESSIBLE",
+          "No tenés acceso a este trabajo de IA.");
+      default:
+        throw error;
+    }
   }
 }
 export async function settleAttempt(
